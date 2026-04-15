@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "MusicCave Bridge",
+  "version": "1.0",
+  "description": "Connects MusicCave React App to Apple Music & Spotify DOM.",
+  "permissions":[
+    "activeTab", 
+    "scripting", 
+    "tabs"
+  ],
+  "host_permissions":[
+    "https://music.apple.com/*",
+    "https://open.spotify.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts":[
+    {
+      "matches": ["https://music.apple.com/*", "https://open.spotify.com/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "externally_connectable": {
+    "matches": ["http://localhost:5173/*"]
+  }
+}
