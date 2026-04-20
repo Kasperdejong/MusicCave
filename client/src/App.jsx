@@ -9,6 +9,10 @@ function App() {
   const [errorMsg, setErrorMsg] = useState("");
   const [transferMode, setTransferMode] = useState("transfer_fill");
 
+  // --- SEARCH STATES ---
+  const [appleSearch, setAppleSearch] = useState("");
+  const [spotifySearch, setSpotifySearch] = useState("");
+
   // --- PERSISTENT PLATFORM DATA (Remembering both) ---
   const [platformData, setPlatformData] = useState({
     apple: null,
@@ -52,7 +56,6 @@ function App() {
         if (response && response.tabsData && response.tabsData.length > 0) {
           const data = response.tabsData[0];
           
-          // Update only the specific platform data without erasing the other
           setPlatformData(prev => ({
             ...prev,
             [platform]: data
@@ -64,6 +67,15 @@ function App() {
       }
     );
   };
+
+  // --- FILTER LOGIC ---
+  const filteredApple = applePlaylists?.filter(pl => 
+    pl.name.toLowerCase().includes(appleSearch.toLowerCase())
+  );
+
+  const filteredSpotify = spotifyPlaylists?.filter(pl => 
+    pl.name.toLowerCase().includes(spotifySearch.toLowerCase())
+  );
 
   const startTransfer = async () => {
     const sourcePlatform = targetService === 'spotify' ? 'apple' : 'spotify';
@@ -82,7 +94,6 @@ function App() {
       return;
     }
 
-    // Access the persistent data for the source platform
     const sourceData = platformData[sourcePlatform];
     if (!sourceData || !sourceData.songs) {
         setErrorMsg(`Please scan ${sourcePlatform} first.`);
@@ -106,7 +117,6 @@ function App() {
           },
           (response) => {
             console.log("Robot response:", response);
-            // Reverted back to 2.5s delay for stability
             setTimeout(resolve, 2500); 
           }
         );
@@ -117,10 +127,22 @@ function App() {
     setTransferStatus("✅ All songs processed!");
   };
 
+  const searchInputStyle = {
+    width: "100%",
+    padding: "8px",
+    marginBottom: "10px",
+    borderRadius: "5px",
+    border: "none",
+    backgroundColor: "#eee",
+    color: "#333",
+    fontSize: "14px",
+    boxSizing: "border-box",
+    outline: "none"
+  };
+
   return (
     <div style={{ backgroundColor: "#222", color: "#fff", minHeight: "100vh", fontFamily: "sans-serif", paddingBottom: "50px" }}>
 
-      {/* Navbar (RESTORED STYLE) */}
       <div style={{ backgroundColor: "#6a0dad", padding: "15px 30px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "20px", fontWeight: "bold" }}>
           <img src="/Logo.png" alt="MusicCave Logo" style={{ height: "35px", width: "auto" }} />
@@ -150,27 +172,36 @@ function App() {
 
         <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-start", gap: "20px", marginTop: "30px", flexWrap: "wrap" }}>
 
-          {/* Apple Music Column (RESTORED STYLE) */}
+          {/* Apple Music Column */}
           <div style={{ backgroundColor: "#999", borderRadius: "10px", padding: "20px", width: "250px", minHeight: "300px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            <div style={{ maxHeight: "250px", overflowY: "auto", paddingRight: "5px" }}>
-              {applePlaylists ? applePlaylists.map((pl, idx) => (
-                <div 
-                  key={idx} 
-                  onClick={() => setSelectedApple(pl)}
-                  style={{ 
-                    backgroundColor: selectedApple?.name === pl.name ? "#b31b2d" : "#fa243c", 
-                    padding: "10px", borderRadius: "5px", marginBottom: "10px", display: "flex", alignItems: "center", gap: "10px", color: "#fff", cursor: "pointer",
-                    border: selectedApple?.name === pl.name ? "2px solid white" : "none"
-                  }}>
-                  <span>{getPlaylistIcon(pl.name)}</span>
-                  <span style={{ flexGrow: 1, textAlign: "left" }}>{pl.name}</span>
-                </div>
-              )) : <p style={{ color: "#333", fontStyle: "italic" }}>No playlists loaded.</p>}
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {/* Search Bar */}
+              <input 
+                type="text" 
+                placeholder="Search Apple..." 
+                value={appleSearch}
+                onChange={(e) => setAppleSearch(e.target.value)}
+                style={searchInputStyle}
+              />
+              <div style={{ maxHeight: "250px", overflowY: "auto", paddingRight: "5px" }}>
+                {filteredApple ? filteredApple.map((pl, idx) => (
+                  <div 
+                    key={idx} 
+                    onClick={() => setSelectedApple(pl)}
+                    style={{ 
+                      backgroundColor: selectedApple?.name === pl.name ? "#b31b2d" : "#fa243c", 
+                      padding: "10px", borderRadius: "5px", marginBottom: "10px", display: "flex", alignItems: "center", gap: "10px", color: "#fff", cursor: "pointer",
+                      border: selectedApple?.name === pl.name ? "2px solid white" : "none"
+                    }}>
+                    <span>{getPlaylistIcon(pl.name)}</span>
+                    <span style={{ flexGrow: 1, textAlign: "left" }}>{pl.name}</span>
+                  </div>
+                )) : <p style={{ color: "#333", fontStyle: "italic" }}>No playlists loaded.</p>}
+              </div>
             </div>
             <button onClick={() => scanPlatform('apple')} style={{ backgroundColor: "#6a0dad", color: "white", border: "none", padding: "10px", borderRadius: "5px", cursor: "pointer", marginTop: "20px", fontWeight: "bold" }}>Scan appleMusic</button>
           </div>
 
-          {/* Transfer Mode Selector (RESTORED STYLE) */}
           <div style={{ marginTop: "120px" }}>
             <select
               value={transferMode}
@@ -182,27 +213,36 @@ function App() {
             </select>
           </div>
 
-          {/* Spotify Column (RESTORED STYLE) */}
+          {/* Spotify Column */}
           <div style={{ backgroundColor: "#999", borderRadius: "10px", padding: "20px", width: "250px", minHeight: "300px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            <div style={{ maxHeight: "250px", overflowY: "auto", paddingRight: "5px" }}>
-              {spotifyPlaylists ? spotifyPlaylists.map((pl, idx) => (
-                <div 
-                  key={idx} 
-                  onClick={() => setSelectedSpotify(pl)}
-                  style={{ 
-                    backgroundColor: selectedSpotify?.name === pl.name ? "#15833b" : "#1db954", 
-                    padding: "10px", borderRadius: "5px", marginBottom: "10px", display: "flex", alignItems: "center", gap: "10px", color: "#000", fontWeight: "500", cursor: "pointer",
-                    border: selectedSpotify?.name === pl.name ? "2px solid black" : "none"
-                  }}>
-                  <span>{getPlaylistIcon(pl.name)}</span>
-                  <span style={{ flexGrow: 1, textAlign: "left" }}>{pl.name}</span>
-                </div>
-              )) : <p style={{ color: "#333", fontStyle: "italic" }}>No playlists loaded.</p>}
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {/* Search Bar */}
+              <input 
+                type="text" 
+                placeholder="Search Spotify..." 
+                value={spotifySearch}
+                onChange={(e) => setSpotifySearch(e.target.value)}
+                style={searchInputStyle}
+              />
+              <div style={{ maxHeight: "250px", overflowY: "auto", paddingRight: "5px" }}>
+                {filteredSpotify ? filteredSpotify.map((pl, idx) => (
+                  <div 
+                    key={idx} 
+                    onClick={() => setSelectedSpotify(pl)}
+                    style={{ 
+                      backgroundColor: selectedSpotify?.name === pl.name ? "#15833b" : "#1db954", 
+                      padding: "10px", borderRadius: "5px", marginBottom: "10px", display: "flex", alignItems: "center", gap: "10px", color: "#000", fontWeight: "500", cursor: "pointer",
+                      border: selectedSpotify?.name === pl.name ? "2px solid black" : "none"
+                    }}>
+                    <span>{getPlaylistIcon(pl.name)}</span>
+                    <span style={{ flexGrow: 1, textAlign: "left" }}>{pl.name}</span>
+                  </div>
+                )) : <p style={{ color: "#333", fontStyle: "italic" }}>No playlists loaded.</p>}
+              </div>
             </div>
             <button onClick={() => scanPlatform('spotify')} style={{ backgroundColor: "#6a0dad", color: "white", border: "none", padding: "10px", borderRadius: "5px", cursor: "pointer", marginTop: "20px", fontWeight: "bold" }}>Scan Spotify</button>
           </div>
 
-          {/* Into Arrow & Start Button (RESTORED STYLE) */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: "100px" }}>
             <span style={{ fontSize: "18px", margin: "0 10px", color: "#ccc" }}>into ──→</span>
             <button 
@@ -225,7 +265,6 @@ function App() {
             </button>
           </div>
 
-          {/* Target Selection Boxes (RESTORED STYLE) */}
           <div style={{ backgroundColor: "#999", borderRadius: "10px", padding: "20px", width: "180px", marginTop: "60px" }}>
             <div 
                 onClick={() => setTargetService('apple')}
@@ -250,12 +289,10 @@ function App() {
         </div>
       </div>
 
-      {/* Live Connection Data (RESTORED STYLE - Displays both stored datasets) */}
       <div style={{ marginTop: "100px", borderTop: "1px solid #444", paddingTop: "50px", textAlign: "center", backgroundColor: "#1a1a1a" }}>
         <h3 style={{ fontSize: "24px", color: "#ccc", margin: "0 0 10px 0" }}>Live Connection Data</h3>
         <div style={{ display: "flex", justifyContent: "center", gap: "20px", flexWrap: "wrap", padding: "20px" }}>
           
-          {/* Apple Storage Debug */}
           <div style={{
               backgroundColor: "#333", padding: "20px", borderRadius: "8px", width: "450px", textAlign: "left",
               borderLeft: "5px solid #fa243c", opacity: platformData.apple ? 1 : 0.5
@@ -273,7 +310,6 @@ function App() {
             ) : <p style={{ fontSize: "12px", color: "#666" }}>Not scanned yet.</p>}
           </div>
 
-          {/* Spotify Storage Debug */}
           <div style={{
               backgroundColor: "#333", padding: "20px", borderRadius: "8px", width: "450px", textAlign: "left",
               borderLeft: "5px solid #1db954", opacity: platformData.spotify ? 1 : 0.5
