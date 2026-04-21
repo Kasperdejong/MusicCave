@@ -109,21 +109,33 @@ async function deepScrape() {
     const isSpotify = window.location.href.includes('spotify');
     console.log(`MusicCave: Starting Deep Scrape for ${isSpotify ? 'Spotify' : 'Apple'}...`);
     
+    // --- 1. DETECT PLAYLIST NAME (FIXED SELECTORS) ---
+    let detectedName = "Unknown Playlist";
+    try {
+        if (isSpotify) {
+            // Target the H1 specifically in the main content area
+            const h1 = document.querySelector('main h1[data-testid="type-entity-title"], main h1');
+            if (h1) detectedName = h1.innerText.trim();
+        } else {
+            const h1 = document.querySelector('.playlist-header-description__title, h1');
+            if (h1) detectedName = h1.innerText.trim();
+        }
+    } catch (e) { console.error("Robot: Name detection failed", e); }
+    
+    console.log("Robot: Detected Name ->", detectedName);
+
     let allSongs = new Map();
     let foundPlaylists = new Map();
-    
-    // Track both counts
     let lastSongCount = 0; 
     let lastPlaylistCount = 0;
     let sameCountTicks = 0;
 
     for (let i = 0; i < 200; i++) {
-        // --- 1. SCRAPE VISIBLE DATA ---
+        // --- 2. SCRAPE VISIBLE DATA ---
         if (isSpotify) {
+            // Restored Spotify Track Scrape
             document.querySelectorAll('[data-testid="tracklist-row"]').forEach(row => {
-                const isRecommended = row.closest('[data-testid="recommended-track"]') || 
-                                      row.closest('.playlistRecommenderContainer');
-                
+                const isRecommended = row.closest('[data-testid="recommended-track"]') || row.closest('.playlistRecommenderContainer');
                 if (isRecommended) return; 
 
                 const titleEl = row.querySelector('a[data-testid="internal-track-link-name"], div[dir="auto"]');
@@ -135,6 +147,7 @@ async function deepScrape() {
                 }
             });
 
+            // Restored Spotify Sidebar Playlists
             document.querySelectorAll('[role="row"]').forEach(row => {
                 const text = row.innerText || "";
                 if (text.includes("Playlist") || text.includes("Liked") || text.includes("leuk vindt")) {
@@ -145,7 +158,7 @@ async function deepScrape() {
                 }
             });
         } else {
-            // Apple Scraping
+            // Apple Scrape
             document.querySelectorAll('main [role="row"], .songs-list-row').forEach(row => {
                 const titleEl = row.querySelector('[data-testid="track-title"], .songs-list-row__song-name');
                 const artistEl = row.querySelector('[data-testid="track-artist"], .songs-list-row__by-line');
@@ -161,9 +174,10 @@ async function deepScrape() {
             });
         }
 
+        // RESTORED ORIGINAL LOGS
         console.log(`Scrape Progress: ${allSongs.size} songs | ${foundPlaylists.size} playlists.`);
 
-        // --- 2. SCROLL LOGIC ---
+        // --- 3. SCROLL LOGIC ---
         if (isSpotify) {
             const songRows = document.querySelectorAll('[data-testid="tracklist-row"]');
             if (songRows.length > 0) songRows[songRows.length - 1].scrollIntoView();
@@ -185,33 +199,30 @@ async function deepScrape() {
 
         await sleep(isSpotify ? 800 : 1500);
 
-        // --- 3. DUAL PROGRESS CHECK & EXIT STRATEGY ---
-        // Only increment the tick if BOTH counts have stopped growing
+        // --- 4. EXIT STRATEGY ---
         const hasSongsStopped = allSongs.size === lastSongCount;
         const hasPlaylistsStopped = foundPlaylists.size === lastPlaylistCount;
 
         if (hasSongsStopped && hasPlaylistsStopped) {
             sameCountTicks++;
-            console.log(`Robot: No new data found. Progress tick: ${sameCountTicks}/3`);
         } else {
-            // If even ONE new item is found (song OR playlist), reset the timer
             sameCountTicks = 0;
-            if (!hasSongsStopped) console.log("Robot: Found new songs, resetting exit timer.");
-            if (!hasPlaylistsStopped) console.log("Robot: Found new playlists, resetting exit timer.");
         }
 
         if (sameCountTicks >= 3) {
-            console.log("MusicCave: Reached the end of all lists. Ending scrape.");
+            console.log("MusicCave: Reached the end of list.");
             break;
         }
 
-        // Update both counters for next loop
         lastSongCount = allSongs.size;
         lastPlaylistCount = foundPlaylists.size;
     }
     
-    console.log("MusicCave: Scrape completed.");
-    return { songs: Array.from(allSongs.values()), playlists: Array.from(foundPlaylists.values()) };
+    return { 
+        songs: Array.from(allSongs.values()), 
+        playlists: Array.from(foundPlaylists.values()),
+        detectedPlaylistName: detectedName 
+    };
 }
 
 // ==========================================

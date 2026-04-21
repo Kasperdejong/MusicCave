@@ -1,7 +1,7 @@
 // background.js
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
     
-    // ACTION 1: SCAN ALL TABS (Old Generic Ping)
+    // ACTION 1: SCAN ALL TABS 
     if (request.action === "PING_EXTENSION") {
         chrome.tabs.query({}, async (tabs) => {
             const musicTabs = tabs.filter(t => 
