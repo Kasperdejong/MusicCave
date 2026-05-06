@@ -331,6 +331,15 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
     try {
         const finalTargetName = (typeof targetName === 'string') ? targetName : "Cave";
         const searchQuery = getCleanSearchQuery(song);
+
+          const baseCleanTitle = song.title
+            .split(' - ')[0] 
+            .split(' (')[0]  
+            .split(' [')[0]  
+            .replace(/remaster(ed)?/gi, '')
+            .trim()
+            .toLowerCase();
+
         console.log(`Robot: Starting Spotify injection for ${searchQuery}`);
         document.body.click(); 
         await sleep(1000);
@@ -348,15 +357,71 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
         sendKey(searchInput, 'Enter');
         await sleep(3000); 
 
+        // ==========================================
+        // NEW STEP: CLICK THE "SONGS" / "NUMMERS" CHIP
+        // ==========================================
+        console.log("Robot: Looking for 'Songs'/'Nummers' filter chip...");
+        let filterClicked = false;
+        
+        for (let i = 0; i < 10; i++) {
+            // Grab spans that look like chips, or just buttons in the top section
+            const possibleChips = document.querySelectorAll('button span[class*="chip"], button');
+            const targetChip = Array.from(possibleChips).find(el => {
+                const txt = el.innerText?.trim().toLowerCase() || "";
+                // Support Dutch, English, etc.
+                return txt === "nummers" || txt === "songs" || txt === "tracks";
+            });
+
+            if (targetChip) {
+                console.log(`Robot: Found filter chip: "${targetChip.innerText}". Clicking it...`);
+                // If the target is a span, click its parent button just to be safe
+                const clickable = targetChip.closest('button') || targetChip;
+                highlightElement(clickable, "#1db954");
+                clickable.click();
+                filterClicked = true;
+                break;
+            }
+            await sleep(400); // Wait and retry if it hasn't rendered yet
+        }
+
+        if (filterClicked) {
+            await sleep(2000); // Wait for the tracklist to filter and re-render
+        } else {
+            console.log("Robot: Warning - Could not find Songs filter chip. Attempting to continue anyway...");
+        }
+        // ==========================================
+
         console.log("Robot: Searching for tracklist row...");
         let targetRow = null;
-        for (let i = 0; i < 15; i++) {
+               for (let i = 0; i < 15; i++) {
             const rows = document.querySelectorAll('main [data-testid="tracklist-row"], [role="row"]');
-            targetRow = Array.from(rows).find(row => {
-                const text = row.innerText.toLowerCase();
+            
+            // 1. Get only the visible rows (filters out sidebars and hidden stuff)
+            const visibleRows = Array.from(rows).filter(row => {
                 const rect = row.getBoundingClientRect();
-                return text.includes(song.title.split(' - ')[0].toLowerCase()) && rect.left > 250 && rect.width > 0;
+                return rect.left > 250 && rect.width > 0;
             });
+
+            if (visibleRows.length > 0) {
+                // Priority 1: Exact title match (safest)
+                targetRow = visibleRows.find(row => 
+                    row.innerText.toLowerCase().includes(song.title.split(' - ')[0].toLowerCase())
+                );
+                
+                // Priority 2: Ultra-clean title match (Finds "Fade to Black" even if it says Remastered)
+                if (!targetRow) {
+                    targetRow = visibleRows.find(row => 
+                        row.innerText.toLowerCase().includes(baseCleanTitle)
+                    );
+                }
+
+                // Priority 3: Ultimate Fallback -> Just grab the #1 top search result!
+                if (!targetRow) {
+                    console.log(`Robot: Using top search result fallback for: ${song.title}`);
+                    targetRow = visibleRows[0]; // Grab the first row
+                }
+            }
+
             if (targetRow) break;
             await sleep(400);
         }

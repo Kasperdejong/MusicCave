@@ -27,6 +27,8 @@ function App() {
   const [spotifySearch, setSpotifySearch] = useState("");
 
   const [platformData, setPlatformData] = useState({ apple: null, spotify: null });
+  const [songCache, setSongCache] = useState({ apple: {}, spotify: {} });
+
   const [selectedApple, setSelectedApple] = useState(null);
   const [selectedSpotify, setSelectedSpotify] = useState(null);
   const [targetService, setTargetService] = useState(null);
@@ -128,6 +130,15 @@ useEffect(() => {
   }
 }, [session, view]); // Only runs when user logs in or changes views
 
+// --- HELPER: RETURN TO DASHBOARD ---
+  // Tells the extension to switch focus back to this tab
+  const returnToDashboard = () => {
+    window.chrome.runtime.sendMessage(EXTENSION_ID, { 
+      action: "RETURN_TO_DASHBOARD",
+      dashboardUrl: window.location.href // Send the current URL so the extension can find us
+    });
+  };
+
   // --- 4. ROBOT / SCAN LOGIC ---
   const scanPlatform = (platform) => {
     setErrorMsg("");
@@ -143,6 +154,14 @@ useEffect(() => {
           if (platform === 'apple') { setApplePlaylists(data.playlists); setSelectedApple({ name: detectedName }); }
           if (platform === 'spotify') { setSpotifyPlaylists(data.playlists); setSelectedSpotify({ name: detectedName }); }
 
+          setSongCache(prev => ({
+            ...prev,
+            [platform]: {
+              ...prev[platform],
+              [detectedName]: data.songs
+            }
+          }));
+
           try {
             // NEW: Added 'overwrite: true' here
             await authFetch('http://localhost:4000/api/sync', {
@@ -155,6 +174,9 @@ useEffect(() => {
               })
             });
             fetchStats();
+
+            returnToDashboard();
+
           } catch (err) { console.error("Sync Error:", err); }
         } else {
           setErrorMsg(`Could not find an active ${platform} tab.`);
@@ -164,40 +186,60 @@ useEffect(() => {
   };
 
   // --- 5. TRANSFER LOGIC ---
-  const startTransfer = async () => {
+   const startTransfer = async () => {
     // 1. Basic Validations
     if (!targetService) { setErrorMsg("Please select a Target Service."); return; }
     
     const sourcePlatform = targetService === 'spotify' ? 'apple' : 'spotify';
-    const sourceData = platformData[sourcePlatform];
+    
+    // NEW: Figure out exactly which playlists the user clicked in the UI
     const destinationSelection = targetService === 'spotify' ? selectedSpotify : selectedApple;
+    const sourceSelection = targetService === 'spotify' ? selectedApple : selectedSpotify;
     
     if (!destinationSelection || !destinationSelection.name) {
         setErrorMsg(`Please select or scan the target ${targetService} playlist first.`);
         return;
     }
+    if (!sourceSelection || !sourceSelection.name) {
+        setErrorMsg(`Please select a source ${sourcePlatform} playlist from the list.`);
+        return;
+    }
 
     const targetNameString = destinationSelection.name;
-
-    if (!sourceData || !sourceData.songs) { 
-        setErrorMsg(`Please scan the source ${sourcePlatform} playlist first.`); 
-        return; 
-    }
+    const sourceNameString = sourceSelection.name;
 
     // 2. Prepare for Transfer
     setIsTransferring(true);
-    setFailedSongs([]); // Reset failed list
+    setFailedSongs([]); 
     let successfulCount = 0;
 
     try {
+        setTransferStatus(`Fetching "${sourceNameString}"...`);
+
+        // NEW: Get the source songs from the DB (so previous sessions work)
+        const sourceDbRes = await authFetch(`http://localhost:4000/api/songs/${sourcePlatform}?playlistName=${encodeURIComponent(sourceNameString)}`);
+        let sourceSongsToTransfer = await sourceDbRes.json();
+
+        // If DB doesn't have it, check our live memory cache
+        if (!sourceSongsToTransfer || sourceSongsToTransfer.length === 0) {
+            sourceSongsToTransfer = songCache[sourcePlatform][sourceNameString];
+        }
+
+        // If we STILL don't have songs, tell the user to physically scan it
+        if (!sourceSongsToTransfer || sourceSongsToTransfer.length === 0) {
+            setErrorMsg(`We don't have the songs for "${sourceNameString}". Please open it in ${sourcePlatform} and click Scan.`);
+            setIsTransferring(false);
+            return;
+        }
+
         setTransferStatus(`Checking ${targetNameString} for duplicates...`);
 
         // 3. Duplicate Prevention (Fetch existing songs in target from DB)
         const dbRes = await authFetch(`http://localhost:4000/api/songs/${targetService}?playlistName=${encodeURIComponent(targetNameString)}`);
         const existingInTarget = await dbRes.json();
 
-        // 4. Filter songs that aren't in the destination yet
-        const filteredSongs = sourceData.songs.filter(sourceSong => {
+        // 4. Filter songs using our new source array
+        const filteredSongs = sourceSongsToTransfer.filter(sourceSong => {
             const sTitle = sourceSong.title.toLowerCase();
             const sArtist = sourceSong.artist.toLowerCase();
 
@@ -205,10 +247,7 @@ useEffect(() => {
                 const dTitle = dbSong.title.toLowerCase();
                 const dArtist = dbSong.artist.toLowerCase();
 
-                // Exact match
                 if (dTitle === sTitle && dArtist === sArtist) return true;
-
-                // Version match (e.g. "Song (Remastered)" vs "Song")
                 const baseSTitle = sTitle.split('(')[0].split('-')[0].trim();
                 const baseDTitle = dTitle.split('(')[0].split('-')[0].trim();
                 return (baseSTitle === baseDTitle && dArtist === sArtist);
@@ -266,6 +305,10 @@ useEffect(() => {
         }
 
         setTransferStatus("✅ Transfer Sequence Finished!");
+
+        // Return to dashboard function
+        returnToDashboard();
+
         
         // Show report if we had issues or moved songs
         if (successfulCount > 0 || failedSongs.length > 0) {
@@ -447,11 +490,12 @@ if (!session) {
             <h3 style={{ fontSize: "24px", color: "#ccc", margin: "0 0 10px 0" }}>Live Connection Data</h3>
             <div style={{ display: "flex", justifyContent: "center", gap: "20px", flexWrap: "wrap", padding: "20px" }}>
               <div style={{ backgroundColor: "#333", padding: "20px", borderRadius: "8px", width: "450px", textAlign: "left", borderLeft: "5px solid #fa243c", opacity: platformData.apple ? 1 : 0.5 }}>
-                <p style={{ fontSize: "18px", fontWeight: "bold" }}>🍎 Apple Music Data</p>
+                <p style={{ fontSize: "18px", fontWeight: "bold" }}>🍎 Apple Music's Most Recent Data</p>
                 {platformData.apple ? (
                   <>
                     <p style={{ color: "#fff", fontWeight: "bold" }}>Playlist: {platformData.apple.detectedPlaylistName || "Unknown"}</p>
                     <p style={{ color: "#bbb", fontSize: "14px" }}>Songs in memory: {platformData.apple.songs?.length || 0}</p>
+                    <p style={{ color: "#bbb", fontSize: "14px" }}>Below are the most recent 5 songs scanned</p>
                     <div style={{ marginTop: "10px", backgroundColor: "#222", padding: "10px", borderRadius: "5px", maxHeight: "100px", overflowY: "auto" }}>
                       {platformData.apple.songs?.slice(-5).map((s, i) => (
                           <div key={i} style={{ fontSize: "12px", color: "#aaa" }}>{s.title} - {s.artist}</div>
@@ -462,11 +506,12 @@ if (!session) {
               </div>
 
               <div style={{ backgroundColor: "#333", padding: "20px", borderRadius: "8px", width: "450px", textAlign: "left", borderLeft: "5px solid #1db954", opacity: platformData.spotify ? 1 : 0.5 }}>
-                <p style={{ fontSize: "18px", fontWeight: "bold" }}>🟢 Spotify Data</p>
+                <p style={{ fontSize: "18px", fontWeight: "bold" }}>🟢 Spotify's Most Recent Data</p>
                 {platformData.spotify ? (
                   <>
                     <p style={{ color: "#fff", fontWeight: "bold" }}>Playlist: {platformData.spotify.detectedPlaylistName || "Unknown"}</p>
                     <p style={{ color: "#bbb", fontSize: "14px" }}>Songs in memory: {platformData.spotify.songs?.length || 0}</p>
+                    <p style={{ color: "#bbb", fontSize: "14px" }}>Below are the most recent 5 songs scanned</p>
                     <div style={{ marginTop: "10px", backgroundColor: "#222", padding: "10px", borderRadius: "5px", maxHeight: "100px", overflowY: "auto" }}>
                       {platformData.spotify.songs?.slice(-5).map((s, i) => (
                           <div key={i} style={{ fontSize: "12px", color: "#aaa" }}>{s.title} - {s.artist}</div>

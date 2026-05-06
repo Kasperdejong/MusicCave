@@ -97,4 +97,27 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         });
         return true;
     }
+    // ACTION 3: BRING DASHBOARD BACK TO FRONT
+    if (request.action === "RETURN_TO_DASHBOARD") {
+        try {
+            // Get the base URL (e.g., "http://localhost:5173")
+            const origin = new URL(request.dashboardUrl).origin;
+            
+            chrome.tabs.query({}, (tabs) => {
+                // Find the tab that matches your dashboard's URL
+                const dashboardTab = tabs.find(t => t.url && t.url.startsWith(origin));
+                
+                if (dashboardTab) {
+                    // Make the dashboard tab active
+                    chrome.tabs.update(dashboardTab.id, { active: true });
+                    // Bring the browser window containing the dashboard to the front
+                    chrome.windows.update(dashboardTab.windowId, { focused: true });
+                }
+                sendResponse({ status: "Success" });
+            });
+        } catch (e) {
+            sendResponse({ status: "Error", message: "Failed to find dashboard tab" });
+        }
+        return true;
+    }
 });
