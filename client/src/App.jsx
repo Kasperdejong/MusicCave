@@ -29,6 +29,8 @@ function App() {
   const [platformData, setPlatformData] = useState({ apple: null, spotify: null });
   const [songCache, setSongCache] = useState({ apple: {}, spotify: {} });
 
+  const [scannedPlaylists, setScannedPlaylists] = useState({ apple: [], spotify: [] });
+    const [tooltipData, setTooltipData] = useState(null);
   const [selectedApple, setSelectedApple] = useState(null);
   const [selectedSpotify, setSelectedSpotify] = useState(null);
   const [targetService, setTargetService] = useState(null);
@@ -93,6 +95,15 @@ function App() {
     } catch (e) { console.error("History fetch failed", e); }
   };
 
+  const fetchScannedPlaylists = async () => {
+    try {
+      const res = await authFetch('http://localhost:4000/api/scanned-playlists');
+      if (res.ok) {
+        setScannedPlaylists(await res.json());
+      }
+    } catch (e) { console.error("Failed to fetch scanned playlists", e); }
+  };
+
 // --- 1. SETUP AUTH LISTENER (Run ONCE on mount) ---
 useEffect(() => {
   // Check session immediately
@@ -124,6 +135,7 @@ useEffect(() => {
 useEffect(() => {
   if (session) {
     fetchStats();
+    fetchScannedPlaylists();
     if (view === "history") {
       fetchHistory();
     }
@@ -160,6 +172,11 @@ useEffect(() => {
               ...prev[platform],
               [detectedName]: data.songs
             }
+          }));
+
+           setScannedPlaylists(prev => ({
+            ...prev,
+            [platform]: [...(prev[platform] || []), detectedName.toLowerCase()]
           }));
 
           try {
@@ -354,6 +371,13 @@ const downloadMissingSongs = () => {
   const searchInputStyle = { width: "100%", padding: "8px", marginBottom: "10px", borderRadius: "5px", border: "none", backgroundColor: "#eee", fontSize: "14px", boxSizing: "border-box" };
   const navBtnStyle = { background: "none", border: "none", color: "white", cursor: "pointer", fontWeight: "bold", fontSize: "14px" };
 
+  const isPlaylistScanned = (platform, name) => {
+    const lowerName = name.toLowerCase();
+    const inDb = scannedPlaylists[platform]?.includes(lowerName);
+    const inCache = !!songCache[platform]?.[name];
+    return inDb || inCache;
+  };
+
 if (!session) {
     return (
       <div style={{ backgroundColor: "#222", color: "#fff", height: "100vh", display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
@@ -432,16 +456,38 @@ if (!session) {
 
             <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-start", gap: "20px", marginTop: "30px", flexWrap: "wrap" }}>
               
-              {/* Apple Column */}
+             {/* Apple Column */}
               <div style={{ backgroundColor: "#999", borderRadius: "10px", padding: "20px", width: "250px", minHeight: "300px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                 <div>
                   <input type="text" placeholder="Search Apple..." value={appleSearch} onChange={(e) => setAppleSearch(e.target.value)} style={searchInputStyle} />
-                  <div style={{ maxHeight: "250px", overflowY: "auto" }}>
-                    {applePlaylists?.filter(pl => pl.name.toLowerCase().includes(appleSearch.toLowerCase())).map((pl, idx) => (
-                      <div key={idx} onClick={() => setSelectedApple(pl)} style={{ backgroundColor: selectedApple?.name === pl.name ? "#b31b2d" : "#fa243c", padding: "10px", borderRadius: "5px", marginBottom: "10px", color: "#fff", cursor: "pointer", border: selectedApple?.name === pl.name ? "2px solid white" : "none" }}>
-                        <span>{getPlaylistIcon(pl.name)}</span> {pl.name}
-                      </div>
-                    ))}
+                  <div style={{ maxHeight: "250px", overflowY: "auto" }} onScroll={() => setTooltipData(null)}>
+                   {applePlaylists?.filter(pl => pl.name.toLowerCase().includes(appleSearch.toLowerCase())).map((pl, idx) => {
+                      return (
+                        <div 
+                          key={idx} 
+                          onMouseEnter={(e) => {
+                            // 🚀 NEW: Gets exact coordinates of your mouse/button
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setTooltipData({
+                              scanned: isPlaylistScanned('apple', pl.name),
+                              x: rect.left,
+                              y: rect.top + (rect.height / 2)
+                            });
+                          }}
+                          onMouseLeave={() => setTooltipData(null)}
+                          onClick={() => setSelectedApple(pl)} 
+                          style={{ 
+                            backgroundColor: selectedApple?.name === pl.name ? "#b31b2d" : "#fa243c", 
+                            padding: "10px", borderRadius: "5px", marginBottom: "10px", 
+                            color: "#fff", cursor: "pointer", 
+                            border: selectedApple?.name === pl.name ? "2px solid white" : "none" 
+                          }}
+                        >
+                          {/* BUBBLE WAS MOVED OUT OF HERE */}
+                          <span>{getPlaylistIcon(pl.name)}</span> {pl.name}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
                 <button onClick={() => scanPlatform('apple')} style={{ backgroundColor: "#6a0dad", color: "white", border: "none", padding: "10px", borderRadius: "5px", cursor: "pointer", marginTop: "20px", fontWeight: "bold" }}>Scan Apple Music</button>
@@ -458,12 +504,32 @@ if (!session) {
               <div style={{ backgroundColor: "#999", borderRadius: "10px", padding: "20px", width: "250px", minHeight: "300px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                 <div>
                   <input type="text" placeholder="Search Spotify..." value={spotifySearch} onChange={(e) => setSpotifySearch(e.target.value)} style={searchInputStyle} />
-                  <div style={{ maxHeight: "250px", overflowY: "auto" }}>
-                    {spotifyPlaylists?.filter(pl => pl.name.toLowerCase().includes(spotifySearch.toLowerCase())).map((pl, idx) => (
-                      <div key={idx} onClick={() => setSelectedSpotify(pl)} style={{ backgroundColor: selectedSpotify?.name === pl.name ? "#15833b" : "#1db954", padding: "10px", borderRadius: "5px", marginBottom: "10px", color: "#000", fontWeight: "500", cursor: "pointer", border: selectedSpotify?.name === pl.name ? "2px solid black" : "none" }}>
-                        <span>{getPlaylistIcon(pl.name)}</span> {pl.name}
-                      </div>
-                    ))}
+<div style={{ maxHeight: "250px", overflowY: "auto" }} onScroll={() => setTooltipData(null)}>
+                    {spotifyPlaylists?.filter(pl => pl.name.toLowerCase().includes(spotifySearch.toLowerCase())).map((pl, idx) => {
+                      return (
+                        <div 
+                          key={idx} 
+                          onMouseEnter={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setTooltipData({
+                              scanned: isPlaylistScanned('spotify', pl.name),
+                              x: rect.left,
+                              y: rect.top + (rect.height / 2)
+                            });
+                          }}
+                          onMouseLeave={() => setTooltipData(null)}
+                          onClick={() => setSelectedSpotify(pl)} 
+                          style={{ 
+                            backgroundColor: selectedSpotify?.name === pl.name ? "#15833b" : "#1db954", 
+                            padding: "10px", borderRadius: "5px", marginBottom: "10px", 
+                            color: "#000", fontWeight: "500", cursor: "pointer", 
+                            border: selectedSpotify?.name === pl.name ? "2px solid black" : "none" 
+                          }}
+                        >
+                          <span>{getPlaylistIcon(pl.name)}</span> {pl.name}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
                 <button onClick={() => scanPlatform('spotify')} style={{ backgroundColor: "#6a0dad", color: "white", border: "none", padding: "10px", borderRadius: "5px", cursor: "pointer", marginTop: "20px", fontWeight: "bold" }}>Scan Spotify</button>
@@ -484,6 +550,23 @@ if (!session) {
               </div>
             </div>
           </div>
+
+          {/* 🚀 NEW: GLOBAL FIXED TOOLTIP RENDERER */}
+          {tooltipData && (
+            <img 
+              src={tooltipData.scanned ? "/Textbubble_scanned.png" : "/Textbubble_notscanned.png"} 
+              alt="Scan Status"
+              style={{ 
+                position: "fixed",           // 🚀 This is the magic that prevents clipping!
+                left: tooltipData.x - 175,   // Puts it 15px to the left of the button
+                top: tooltipData.y,          // Exact Y coordinate of the hovered button
+                transform: "translateY(-70%)", 
+                width: "160px", 
+                zIndex: 9999,                
+                pointerEvents: "none"        
+              }} 
+            />
+          )}
 
           {/* LIVE CONNECTION DATA */}
           <div style={{ marginTop: "100px", borderTop: "1px solid #444", paddingTop: "50px", textAlign: "center", backgroundColor: "#1a1a1a" }}>

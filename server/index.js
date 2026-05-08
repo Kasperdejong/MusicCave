@@ -50,6 +50,34 @@ app.get('/api/stats', authenticateUser, async (req, res) => {
     }
 });
 
+// GET SCANNED PLAYLISTS (For the Hover Tooltips)
+app.get('/api/scanned-playlists', authenticateUser, async (req, res) => {
+    try {
+        // Fetch all platform/playlist combos for this user
+        const { data, error } = await supabase
+            .from('user_songs')
+            .select('platform, playlist_name');
+        
+        if (error) throw error;
+
+        // Group them into unique sets so we don't send duplicate names
+        const scanned = { apple: new Set(), spotify: new Set() };
+        data.forEach(row => {
+            if (row.platform && row.playlist_name) {
+                scanned[row.platform].add(row.playlist_name.toLowerCase());
+            }
+        });
+
+        // Convert Sets back to Arrays to send to frontend
+        res.json({ 
+            apple: Array.from(scanned.apple), 
+            spotify: Array.from(scanned.spotify) 
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // FIX 2: The Duplicate Check Route (Fixes "Nothing is adding" error)
 // This is required because startTransfer calls this to see what songs to skip
 app.get('/api/songs/:platform', authenticateUser, async (req, res) => {
