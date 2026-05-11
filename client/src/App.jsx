@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef  } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // 1. Initialize Supabase
@@ -40,6 +40,8 @@ function App() {
 
   const [failedSongs, setFailedSongs] = useState([]); // Tracks songs the robot couldn't find
   const [showResultsModal, setShowResultsModal] = useState(false); // Controls the final report view
+
+  const cancelTransferRef = useRef(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -202,6 +204,11 @@ useEffect(() => {
     );
   };
 
+  const handleCancelTransfer = () => {
+    cancelTransferRef.current = true;
+    setTransferStatus("Stopping after current song...");
+  };
+
   // --- 5. TRANSFER LOGIC ---
    const startTransfer = async () => {
     // 1. Basic Validations
@@ -227,6 +234,7 @@ useEffect(() => {
 
     // 2. Prepare for Transfer
     setIsTransferring(true);
+    cancelTransferRef.current = false;
     setFailedSongs([]); 
     let successfulCount = 0;
 
@@ -282,6 +290,10 @@ useEffect(() => {
         const action = targetService === 'spotify' ? "TRANSFER_SONG_TO_SPOTIFY" : "TRANSFER_SONG_TO_APPLE";
 
         for (let i = 0; i < filteredSongs.length; i++) {
+            if (cancelTransferRef.current) {
+                console.log("Transfer cancelled by user.");
+                break; // This safely exits the loop!
+            }
             const song = filteredSongs[i];
             setTransferStatus(`Moving (${i + 1}/${filteredSongs.length}): ${song.title}`);
 
@@ -321,8 +333,11 @@ useEffect(() => {
             await new Promise(r => setTimeout(r, 2500));
         }
 
-        setTransferStatus("✅ Transfer Sequence Finished!");
-
+        if (cancelTransferRef.current) {
+            setTransferStatus("🚫 Transfer Cancelled!");
+        } else {
+            setTransferStatus("✅ Transfer Sequence Finished!");
+        }
         // Return to dashboard function
         returnToDashboard();
 
@@ -466,7 +481,7 @@ if (!session) {
                         <div 
                           key={idx} 
                           onMouseEnter={(e) => {
-                            // 🚀 NEW: Gets exact coordinates of your mouse/button
+                            // Gets exact coordinates of your mouse/button
                             const rect = e.currentTarget.getBoundingClientRect();
                             setTooltipData({
                               scanned: isPlaylistScanned('apple', pl.name),
@@ -535,11 +550,17 @@ if (!session) {
                 <button onClick={() => scanPlatform('spotify')} style={{ backgroundColor: "#6a0dad", color: "white", border: "none", padding: "10px", borderRadius: "5px", cursor: "pointer", marginTop: "20px", fontWeight: "bold" }}>Scan Spotify</button>
               </div>
 
-              {/* Start Button */}
+             {/* Start & Cancel Buttons */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: "100px" }}>
-                 <button onClick={startTransfer} disabled={isTransferring} style={{ backgroundColor: isTransferring ? "#555" : "#1db954", color: "#fff", border: "none", padding: "15px 30px", borderRadius: "50px", fontWeight: "bold", cursor: "pointer" }}>
-                  {isTransferring ? "TRANSFERRING..." : "START TRANSFER"}
-                </button>
+                {!isTransferring ? (
+                  <button onClick={startTransfer} style={{ backgroundColor: "#1db954", color: "#fff", border: "none", padding: "15px 30px", borderRadius: "50px", fontWeight: "bold", cursor: "pointer" }}>
+                    START TRANSFER
+                  </button>
+                ) : (
+                  <button onClick={handleCancelTransfer} style={{ backgroundColor: "#ff4d4d", color: "#fff", border: "none", padding: "15px 30px", borderRadius: "50px", fontWeight: "bold", cursor: "pointer", boxShadow: "0 0 15px rgba(255, 77, 77, 0.6)" }}>
+                    ⏹ CANCEL TRANSFER
+                  </button>
+                )}
               </div>
 
               {/* Target Service Toggle Boxes */}
@@ -557,7 +578,7 @@ if (!session) {
               src={tooltipData.scanned ? "/Textbubble_scanned.png" : "/Textbubble_notscanned.png"} 
               alt="Scan Status"
               style={{ 
-                position: "fixed",           // 🚀 This is the magic that prevents clipping!
+                position: "fixed",           // This is the magic that prevents clipping!
                 left: tooltipData.x - 175,   // Puts it 15px to the left of the button
                 top: tooltipData.y,          // Exact Y coordinate of the hovered button
                 transform: "translateY(-70%)", 
