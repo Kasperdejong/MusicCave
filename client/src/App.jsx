@@ -210,7 +210,7 @@ useEffect(() => {
   };
 
   // --- 5. TRANSFER LOGIC ---
-   const startTransfer = async () => {
+    const startTransfer = async () => {
     // 1. Basic Validations
     if (!targetService) { setErrorMsg("Please select a Target Service."); return; }
     
@@ -290,42 +290,48 @@ useEffect(() => {
         const action = targetService === 'spotify' ? "TRANSFER_SONG_TO_SPOTIFY" : "TRANSFER_SONG_TO_APPLE";
 
         for (let i = 0; i < filteredSongs.length; i++) {
+            
+            // CHECK FOR CANCEL BEFORE STARTING NEXT SONG
             if (cancelTransferRef.current) {
                 console.log("Transfer cancelled by user.");
                 break; // This safely exits the loop!
             }
+            
             const song = filteredSongs[i];
             setTransferStatus(`Moving (${i + 1}/${filteredSongs.length}): ${song.title}`);
 
             try {
-                // Send command to Extension
                 const robotRes = await new Promise((resolve, reject) => {
-                    window.chrome.runtime.sendMessage(EXTENSION_ID, { action, song, targetName: targetNameString }, (res) => {
+                    window.chrome.runtime.sendMessage(EXTENSION_ID, { 
+                        action, 
+                        song, 
+                        targetName: targetNameString,
+                        // 🚀 NEW: Send the math so the popup knows where it is!
+                        progress: { current: i + 1, total: filteredSongs.length }
+                    }, (res) => {
                         if (window.chrome.runtime.lastError) reject(window.chrome.runtime.lastError);
                         else resolve(res);
                     });
                 });
 
-                if (robotRes?.status === "Success") {
-                    // Save to DB immediately so the next run knows it's there
+                // 🚀 Handle instant cancel from the popup
+                if (robotRes?.status === "Cancelled") {
+                    cancelTransferRef.current = true;
+                    setFailedSongs(prev => [...prev, { ...song, reason: "Cancelled by User" }]);
+                    break; // Abort loop instantly
+                }
+                else if (robotRes?.status === "Success") {
                     await authFetch('http://localhost:4000/api/sync', {
                         method: 'POST',
-                        body: JSON.stringify({ 
-                            platform: targetService, 
-                            songs: [song], 
-                            playlistName: targetNameString,
-                            overwrite: false
-                        })
+                        body: JSON.stringify({ platform: targetService, songs: [song], playlistName: targetNameString, overwrite: false })
                     });
-                    successfulCount++;
+                    successfulCount++; 
                     fetchStats();
                 } else {
-                    // Song not found or UI error: Log it and CONTINUE
                     console.warn(`Robot failed on: ${song.title}`, robotRes?.message);
                     setFailedSongs(prev => [...prev, { ...song, reason: robotRes?.message || "Not found" }]);
                 }
             } catch (err) {
-                // Extension communication error: Log it and CONTINUE
                 setFailedSongs(prev => [...prev, { ...song, reason: "Robot Interrupted" }]);
             }
 
@@ -333,14 +339,17 @@ useEffect(() => {
             await new Promise(r => setTimeout(r, 2500));
         }
 
+        // 🚀 NEW: Tell the extension to delete the UI off Spotify's screen
+        window.chrome.runtime.sendMessage(EXTENSION_ID, { action: "CLEANUP_UI" });
+
         if (cancelTransferRef.current) {
             setTransferStatus("🚫 Transfer Cancelled!");
         } else {
             setTransferStatus("✅ Transfer Sequence Finished!");
         }
+        
         // Return to dashboard function
         returnToDashboard();
-
         
         // Show report if we had issues or moved songs
         if (successfulCount > 0 || failedSongs.length > 0) {
@@ -366,7 +375,7 @@ useEffect(() => {
         }
         setIsTransferring(false);
     }
-};
+  };
 
 const downloadMissingSongs = () => {
     const header = `MusicCave - Missing Songs Report\nGenerated: ${new Date().toLocaleString()}\nTarget Playlist: ${targetService === 'spotify' ? selectedSpotify?.name : selectedApple?.name}\n---------------------------\n\n`;

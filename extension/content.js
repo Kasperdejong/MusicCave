@@ -1,7 +1,71 @@
 // content.js
 console.log("MusicCave Content Script: FULL HYBRID MODE ACTIVE");
 
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// 🚀 NEW: The Global Cancel Flag
+let globalCancelFlag = false;
+
+// 🚀 NEW: Smart Sleep. This checks the cancel flag every 100ms. 
+// If you click cancel, it instantly throws an error to abort the script!
+const sleep = (ms) => new Promise((resolve, reject) => {
+    let waited = 0;
+    const tick = 100;
+    const interval = setInterval(() => {
+        if (globalCancelFlag) {
+            clearInterval(interval);
+            reject(new Error("CANCELLED_BY_USER"));
+        }
+        waited += tick;
+        if (waited >= ms) {
+            clearInterval(interval);
+            resolve();
+        }
+    }, tick);
+});
+
+// 🚀 NEW: The UI Renderer
+function renderProgressUI(song, progress) {
+    if (!progress) return;
+    let overlay = document.getElementById("musiccave-progress-ui");
+    
+    if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "musiccave-progress-ui";
+        overlay.style.cssText = `
+            position: fixed; bottom: 30px; right: 30px; width: 300px;
+            background-color: #222; border: 2px solid #6a0dad; border-radius: 12px;
+            padding: 15px; z-index: 2147483647; color: white; font-family: sans-serif;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        `;
+        
+        overlay.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <strong style="font-size: 16px;">🤖 MusicCave Transfer</strong>
+            </div>
+            <div id="musiccave-progress-text" style="color: #1db954; font-weight: bold; margin-bottom: 5px;"></div>
+            <div id="musiccave-song-title" style="font-size: 13px; color: #aaa; margin-bottom: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+            <button id="musiccave-cancel-btn" style="width: 100%; background-color: #ff4d4d; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(255, 77, 77, 0.4);">
+                ⏹ CANCEL
+            </button>
+        `;
+        document.body.appendChild(overlay);
+
+        document.getElementById("musiccave-cancel-btn").addEventListener("click", () => {
+            globalCancelFlag = true;
+            const btn = document.getElementById("musiccave-cancel-btn");
+            btn.innerText = "Aborting...";
+            btn.style.backgroundColor = "#555";
+        });
+    }
+    
+    // Update text for current song
+    document.getElementById("musiccave-progress-text").innerText = `Moving Song ${progress.current} of ${progress.total}`;
+    document.getElementById("musiccave-song-title").innerText = `${song.title} - ${song.artist}`;
+}
+
+function removeProgressUI() {
+    const overlay = document.getElementById("musiccave-progress-ui");
+    if (overlay) overlay.remove();
+}
 
 // Helper for Visual Debugging (Outlines)
 function highlightElement(el, color = "#fa243c") {
@@ -17,11 +81,8 @@ function highlightElement(el, color = "#fa243c") {
 // Utility to clean song titles
 function getCleanSearchQuery(song) {
     let cleanTitle = song.title
-        .split(' - ')[0] 
-        .split(' (')[0]  
-        .split(' [')[0]  
-        .replace(/remaster(ed)?/gi, '')
-        .trim();
+        .split(' - ')[0].split(' (')[0].split(' [')[0]  
+        .replace(/remaster(ed)?/gi, '').trim();
     return `${cleanTitle} ${song.artist}`;
 }
 
@@ -317,9 +378,14 @@ async function executeAppleInjection(song, targetName, sendResponse) {
 
         if (!foundPlaylist) throw new Error(`Playlist '${finalTargetName}' not found.`);
         sendResponse({ status: "Success" });
-    } catch (err) { 
-        console.error("Apple Injection Error:", err);
-        sendResponse({ status: "Error", message: err.toString() }); 
+    }  catch (err) {
+        console.error("Injection Error:", err);
+        // 🚀 NEW: Catch the custom cancel error
+        if (err.message === "CANCELLED_BY_USER") {
+            sendResponse({ status: "Cancelled", message: "User cancelled from popup" });
+        } else {
+            sendResponse({ status: "Error", message: err.toString() });
+        }
     }
 }
 
@@ -492,8 +558,13 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
             }
         }
     } catch (err) {
-        console.error("Spotify Injection Error:", err);
-        sendResponse({ status: "Error", message: err.toString() });
+        console.error("Injection Error:", err);
+        // 🚀 NEW: Catch the custom cancel error
+        if (err.message === "CANCELLED_BY_USER") {
+            sendResponse({ status: "Cancelled", message: "User cancelled from popup" });
+        } else {
+            sendResponse({ status: "Error", message: err.toString() });
+        }
     }
 }
 
@@ -507,11 +578,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; 
     }
     if (request.action === "INJECT_SONG") {
+        globalCancelFlag = false; // Reset flag
+        renderProgressUI(request.song, request.progress); // Draw UI
+
         if (window.location.href.includes('spotify.com')) {
             executeSpotifyInjection(request.song, request.targetName, sendResponse);
         } else if (window.location.href.includes('apple.com')) {
             executeAppleInjection(request.song, request.targetName, sendResponse);
         }
         return true; 
+    }
+    if (request.action === "REMOVE_UI") {
+        removeProgressUI();
+        sendResponse({ status: "Success" });
+        return true;
     }
 });
