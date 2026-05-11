@@ -557,6 +557,48 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
                 throw new Error("Flyout interaction failed.");
             }
         }
+         console.log("Robot: Checking for 'Already Added' popup...");
+        await sleep(1200); // Give Spotify a moment to render the modal
+
+        const duplicateText = document.querySelector('[data-testid="confirm-dialog-description"]');
+        if (duplicateText) {
+            console.log("Robot: Duplicate Popup detected!");
+            
+            // 1. Go up the HTML tree to isolate the Modal Box itself.
+            // This prevents the robot from accidentally finding Play/Pause buttons on the main screen.
+            const modalContainer = duplicateText.parentElement.parentElement; 
+            
+            if (modalContainer) {
+                // 2. ONLY look for buttons inside this specific modal box
+                const modalButtons = modalContainer.querySelectorAll('button');
+                
+                let skipBtn = Array.from(modalButtons).find(b => {
+                    const txt = b.innerText.toLowerCase();
+                    return txt.includes("niet") || txt.includes("don't") || txt.includes("skip") || txt.includes("cancel");
+                });
+
+                // Fallback just in case text doesn't match
+                if (!skipBtn) {
+                    skipBtn = modalContainer.querySelector('[data-encore-id="buttonPrimary"]');
+                }
+
+                if (skipBtn) {
+                    console.log("Robot: Safely locked onto the Modal's skip button. Clicking it...");
+                    skipBtn.focus();
+                    highlightElement(skipBtn, "#ff4d4d");
+                    await sleep(300);
+                    
+                    // Fire both native click and React Enter key just to guarantee it triggers
+                    skipBtn.click();
+                    sendKey(skipBtn, 'Enter');
+                    
+                    await sleep(1000); // Wait for modal to disappear
+                }
+            }
+        }
+
+        // Send success after the modal check is done
+        sendResponse({ status: "Success" });
     } catch (err) {
         console.error("Injection Error:", err);
         // 🚀 NEW: Catch the custom cancel error
