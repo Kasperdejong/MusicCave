@@ -263,20 +263,15 @@ useEffect(() => {
         const dbRes = await authFetch(`https://musiccave-server.onrender.com/api/songs/${targetService}?playlistName=${encodeURIComponent(targetNameString)}`);
         const existingInTarget = await dbRes.json();
 
-        // 4. Filter songs using our new source array
+        // 4. Filter songs using our new Fuzzy Matcher
         const filteredSongs = sourceSongsToTransfer.filter(sourceSong => {
-            const sTitle = sourceSong.title.toLowerCase();
-            const sArtist = sourceSong.artist.toLowerCase();
-
-            return !existingInTarget.some(dbSong => {
-                const dTitle = dbSong.title.toLowerCase();
-                const dArtist = dbSong.artist.toLowerCase();
-
-                if (dTitle === sTitle && dArtist === sArtist) return true;
-                const baseSTitle = sTitle.split('(')[0].split('-')[0].trim();
-                const baseDTitle = dTitle.split('(')[0].split('-')[0].trim();
-                return (baseSTitle === baseDTitle && dArtist === sArtist);
+            // Check if this sourceSong exists ANYWHERE in the existing database array
+            const isAlreadyThere = existingInTarget.some(dbSong => {
+                return isDuplicateSong(sourceSong, dbSong);
             });
+
+            // If it IS already there, filter it out (return false). If not, keep it (return true).
+            return !isAlreadyThere;
         });
 
         if (filteredSongs.length === 0) {
@@ -389,6 +384,58 @@ const downloadMissingSongs = () => {
     link.click();
     URL.revokeObjectURL(url);
 };
+
+// --- FUZZY DUPLICATE CHECKER ---
+  // Returns TRUE if the songs are basically the same song
+  const isDuplicateSong = (source, target) => {
+    const sTitle = source.title.toLowerCase();
+    const tTitle = target.title.toLowerCase();
+    const sArtist = source.artist.toLowerCase();
+    const tArtist = target.artist.toLowerCase();
+
+    // 1. Exact Match (Easiest)
+    if (sTitle === tTitle && sArtist === tArtist) return true;
+
+    // 2. Bulletproof Title Cleaning
+    const cleanTitle = (t) => {
+        return t
+            .split('(')[0]   // Remove anything after '('
+            .split('[')[0]   // Remove anything after '['
+            .split('-')[0]   // Remove anything after standard '-'
+            .split('–')[0]   // Remove anything after long en-dash '–'
+            .replace(/重制版/gi, '') // Strip Chinese 'Remastered' just in case
+            .trim();
+    };
+
+    // 3. Smart Artist Cleaning (Fixes the MF DOOM & Kurious issue)
+    const cleanArtist = (a) => {
+        return a
+            .replace(/[,&]/g, '')    // Strip commas and ampersands entirely
+            .replace(/\s+/g, ' ')    // Fix accidental double spaces
+            .split('feat')[0]        // Remove featuring artists
+            .split('ft.')[0]
+            .trim();
+    };
+
+    const sTitleClean = cleanTitle(sTitle);
+    const tTitleClean = cleanTitle(tTitle);
+    const sArtistClean = cleanArtist(sArtist);
+    const tArtistClean = cleanArtist(tArtist);
+
+    // 4. Final Comparison
+    if (sTitleClean === tTitleClean) {
+        // If titles match, check if artists are highly similar
+        if (sArtistClean === tArtistClean) return true;
+        
+        // If one platform says "MF DOOM Kurious" and the other just says "MF DOOM"
+        if (sArtistClean.includes(tArtistClean) || tArtistClean.includes(sArtistClean)) return true;
+        
+        // Compare just the very first word of the artist (e.g., "Fei" === "Fei")
+        if (sArtistClean.split(' ')[0] === tArtistClean.split(' ')[0]) return true;
+    }
+
+    return false;
+  };
 
   // --- STYLING & HELPERS ---
   const getPlaylistIcon = (n) => (n.toLowerCase().includes("liked") || n.toLowerCase().includes("favourite")) ? "❤️" : "";
@@ -528,7 +575,7 @@ if (!session) {
               <div style={{ backgroundColor: "#999", borderRadius: "10px", padding: "20px", width: "250px", minHeight: "300px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                 <div>
                   <input type="text" placeholder="Search Spotify..." value={spotifySearch} onChange={(e) => setSpotifySearch(e.target.value)} style={searchInputStyle} />
-<div style={{ maxHeight: "250px", overflowY: "auto" }} onScroll={() => setTooltipData(null)}>
+                  <div style={{ maxHeight: "250px", overflowY: "auto" }} onScroll={() => setTooltipData(null)}>
                     {spotifyPlaylists?.filter(pl => pl.name.toLowerCase().includes(spotifySearch.toLowerCase())).map((pl, idx) => {
                       return (
                         <div 
