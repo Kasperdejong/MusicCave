@@ -5,3 +5,9 @@ Extension ID: In your App.jsx, you have const EXTENSION_ID = "yourextensionidher
 
 you need to update the EXTENSION_ID in App.jsx to match your own local extension ID once they load it.
 Localhost: Since your externally_connectable in manifest.json points to http://localhost:5173/\*, the project will only work for people running it locally.
+
+## Notes Les documentatie
+
+- Maak een ERD (niet alleen voor mezelf maar ook voor anderen voor overzicht van de Database)
+
+- Een van de beoordelingscriteria is dat je bewust hebt gedocumenteerd. (server, extensie, client, ERD(database))

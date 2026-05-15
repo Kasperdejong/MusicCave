@@ -51,7 +51,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
                         action: "INJECT_SONG", 
                         song: request.song, 
                         targetName: request.targetName,
-                        progress: request.progress // 🚀 NEW: Passing progress through!
+                        progress: request.progress // Passing progress through!
                     }, (response) => {
                         if (chrome.runtime.lastError) sendResponse({ status: "Error", message: "Tab closed or not responding" });
                         else sendResponse(response);
@@ -80,7 +80,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         return true;
     }
 
-    // 🚀 ACTION 4: CLEANUP UI WHEN FINISHED
+    // ACTION 4: CLEANUP UI WHEN FINISHED
     if (request.action === "CLEANUP_UI") {
         chrome.tabs.query({}, (tabs) => {
             tabs.forEach(tab => {

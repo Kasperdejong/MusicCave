@@ -306,7 +306,7 @@ useEffect(() => {
                         action, 
                         song, 
                         targetName: targetNameString,
-                        // 🚀 NEW: Send the math so the popup knows where it is!
+                        // Send the math so the popup knows where it is!
                         progress: { current: i + 1, total: filteredSongs.length }
                     }, (res) => {
                         if (window.chrome.runtime.lastError) reject(window.chrome.runtime.lastError);
@@ -314,7 +314,7 @@ useEffect(() => {
                     });
                 });
 
-                // 🚀 Handle instant cancel from the popup
+                // Handle instant cancel from the popup
                 if (robotRes?.status === "Cancelled") {
                     cancelTransferRef.current = true;
                     setFailedSongs(prev => [...prev, { ...song, reason: "Cancelled by User" }]);
@@ -339,7 +339,7 @@ useEffect(() => {
             await new Promise(r => setTimeout(r, 2500));
         }
 
-        // 🚀 NEW: Tell the extension to delete the UI off Spotify's screen
+        // Tell the extension to delete the UI off Spotify's screen
         window.chrome.runtime.sendMessage(EXTENSION_ID, { action: "CLEANUP_UI" });
 
         if (cancelTransferRef.current) {
@@ -581,7 +581,7 @@ if (!session) {
             </div>
           </div>
 
-          {/* 🚀 NEW: GLOBAL FIXED TOOLTIP RENDERER */}
+          {/* GLOBAL FIXED TOOLTIP RENDERER */}
           {tooltipData && (
             <img 
               src={tooltipData.scanned ? "/Textbubble_scanned.png" : "/Textbubble_notscanned.png"} 
@@ -696,7 +696,7 @@ if (!session) {
             <div style={{ display: "flex", gap: "10px", flexDirection: "column" }}>
               {failedSongs.length > 0 && (
                 <button onClick={downloadMissingSongs} style={{ backgroundColor: "#fff", color: "#000", padding: "10px", border: "none", borderRadius: "5px", fontWeight: "bold", cursor: "pointer" }}>
-                  📥 Download Missed Songs (.txt)
+                  ⚡️ Download Missed Songs (.txt)
                 </button>
               )}
               <button onClick={() => setShowResultsModal(false)} style={{ backgroundColor: "#6a0dad", color: "#fff", padding: "10px", border: "none", borderRadius: "5px", fontWeight: "bold", cursor: "pointer" }}>

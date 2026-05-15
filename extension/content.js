@@ -1,10 +1,10 @@
 // content.js
 console.log("MusicCave Content Script: FULL HYBRID MODE ACTIVE");
 
-// 🚀 NEW: The Global Cancel Flag
+// The Global Cancel Flag
 let globalCancelFlag = false;
 
-// 🚀 NEW: Smart Sleep. This checks the cancel flag every 100ms. 
+// Smart Sleep. This checks the cancel flag every 100ms. 
 // If you click cancel, it instantly throws an error to abort the script!
 const sleep = (ms) => new Promise((resolve, reject) => {
     let waited = 0;
@@ -22,7 +22,7 @@ const sleep = (ms) => new Promise((resolve, reject) => {
     }, tick);
 });
 
-// 🚀 NEW: The UI Renderer
+// The UI Renderer
 function renderProgressUI(song, progress) {
     if (!progress) return;
     let overlay = document.getElementById("musiccave-progress-ui");
@@ -39,7 +39,7 @@ function renderProgressUI(song, progress) {
         
         overlay.innerHTML = `
             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                <strong style="font-size: 16px;">🤖 MusicCave Transfer</strong>
+                <strong style="font-size: 16px;">MusicCave Transfer</strong>
             </div>
             <div id="musiccave-progress-text" style="color: #1db954; font-weight: bold; margin-bottom: 5px;"></div>
             <div id="musiccave-song-title" style="font-size: 13px; color: #aaa; margin-bottom: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
@@ -380,7 +380,7 @@ async function executeAppleInjection(song, targetName, sendResponse) {
         sendResponse({ status: "Success" });
     }  catch (err) {
         console.error("Injection Error:", err);
-        // 🚀 NEW: Catch the custom cancel error
+        // Catch the custom cancel error
         if (err.message === "CANCELLED_BY_USER") {
             sendResponse({ status: "Cancelled", message: "User cancelled from popup" });
         } else {
@@ -601,7 +601,7 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
         sendResponse({ status: "Success" });
     } catch (err) {
         console.error("Injection Error:", err);
-        // 🚀 NEW: Catch the custom cancel error
+        // Catch the custom cancel error
         if (err.message === "CANCELLED_BY_USER") {
             sendResponse({ status: "Cancelled", message: "User cancelled from popup" });
         } else {
