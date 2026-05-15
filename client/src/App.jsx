@@ -79,7 +79,7 @@ function App() {
   // --- 3. DATA FETCHING ---
   const fetchStats = async () => {
     try {
-      const res = await authFetch('http://localhost:4000/api/stats');
+      const res = await authFetch('https://musiccave-server.onrender.com/api/stats');
       if (res.ok) {
         const data = await res.json();
         setTotalSynced(data.totalSongs || 0);
@@ -89,7 +89,7 @@ function App() {
 
   const fetchHistory = async () => {
     try {
-      const res = await authFetch('http://localhost:4000/api/history');
+      const res = await authFetch('https://musiccave-server.onrender.com/api/history');
       if (res.ok) {
         const data = await res.json();
         setHistory(data);
@@ -99,7 +99,7 @@ function App() {
 
   const fetchScannedPlaylists = async () => {
     try {
-      const res = await authFetch('http://localhost:4000/api/scanned-playlists');
+      const res = await authFetch('https://musiccave-server.onrender.com/api/scanned-playlists');
       if (res.ok) {
         setScannedPlaylists(await res.json());
       }
@@ -121,7 +121,7 @@ useEffect(() => {
   // Check server health once
   const checkServer = async () => {
     try {
-      const response = await fetch('http://localhost:4000/');
+      const response = await fetch('https://musiccave-server.onrender.com/');
       if (response.ok) setServerStatus("Connected 🟢");
     } catch (error) {
       setServerStatus("Disconnected 🔴");
@@ -183,7 +183,7 @@ useEffect(() => {
 
           try {
             // NEW: Added 'overwrite: true' here
-            await authFetch('http://localhost:4000/api/sync', {
+            await authFetch('https://musiccave-server.onrender.com/api/sync', {
               method: 'POST',
               body: JSON.stringify({ 
                 platform, 
@@ -242,7 +242,7 @@ useEffect(() => {
         setTransferStatus(`Fetching "${sourceNameString}"...`);
 
         // NEW: Get the source songs from the DB (so previous sessions work)
-        const sourceDbRes = await authFetch(`http://localhost:4000/api/songs/${sourcePlatform}?playlistName=${encodeURIComponent(sourceNameString)}`);
+        const sourceDbRes = await authFetch(`https://musiccave-server.onrender.com/api/songs/${sourcePlatform}?playlistName=${encodeURIComponent(sourceNameString)}`);
         let sourceSongsToTransfer = await sourceDbRes.json();
 
         // If DB doesn't have it, check our live memory cache
@@ -260,7 +260,7 @@ useEffect(() => {
         setTransferStatus(`Checking ${targetNameString} for duplicates...`);
 
         // 3. Duplicate Prevention (Fetch existing songs in target from DB)
-        const dbRes = await authFetch(`http://localhost:4000/api/songs/${targetService}?playlistName=${encodeURIComponent(targetNameString)}`);
+        const dbRes = await authFetch(`https://musiccave-server.onrender.com/api/songs/${targetService}?playlistName=${encodeURIComponent(targetNameString)}`);
         const existingInTarget = await dbRes.json();
 
         // 4. Filter songs using our new source array
@@ -321,7 +321,7 @@ useEffect(() => {
                     break; // Abort loop instantly
                 }
                 else if (robotRes?.status === "Success") {
-                    await authFetch('http://localhost:4000/api/sync', {
+                    await authFetch('https://musiccave-server.onrender.com/api/sync', {
                         method: 'POST',
                         body: JSON.stringify({ platform: targetService, songs: [song], playlistName: targetNameString, overwrite: false })
                     });
@@ -362,7 +362,7 @@ useEffect(() => {
     } finally {
         // 6. Final Housekeeping
         if (successfulCount > 0) {
-            await authFetch('http://localhost:4000/api/history', {
+            await authFetch('https://musiccave-server.onrender.com/api/history', {
                 method: 'POST',
                 body: JSON.stringify({
                     source_platform: sourcePlatform,

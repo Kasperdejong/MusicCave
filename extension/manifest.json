@@ -22,6 +22,9 @@
     }
   ],
   "externally_connectable": {
-    "matches": ["http://localhost:5173/*"]
+    "matches": [
+      "http://localhost:5173/*",
+      "https://music-cave.vercel.app/*" 
+    ]
   }
 }
