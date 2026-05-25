@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "checkJs": false
+  },
+  "typeAcquisition": {
+    "enable": true,
+    "include": ["chrome", "node"]
+  },
+  "include": ["client/src/**/*", "extension/**/*", "server/**/*"]
+}

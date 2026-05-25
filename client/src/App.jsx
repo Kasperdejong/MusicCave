@@ -36,7 +36,11 @@ function App() {
   const [targetService, setTargetService] = useState(null);
 
   const [isTransferring, setIsTransferring] = useState(false);
-  const [transferStatus, setTransferStatus] = useState("");
+  const [transferStatus, setTransferStatus] = useState("");  
+
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState({ songs: 0, playlists: 0 });
+  const [scanPlatformName, setScanPlatformName] = useState("");
 
   const [failedSongs, setFailedSongs] = useState([]); // Tracks songs the robot couldn't find
   const [showResultsModal, setShowResultsModal] = useState(false); // Controls the final report view
@@ -156,10 +160,15 @@ useEffect(() => {
   // --- 4. ROBOT / SCAN LOGIC ---
   const scanPlatform = (platform) => {
     setErrorMsg("");
+    setTransferStatus(`Switching to ${platform} to scan...`);
+    setIsTransferring(true); // Optional: turns the text green so the user knows it's doing something
+    
     window.chrome.runtime.sendMessage(
       EXTENSION_ID,
       { action: "SCAN_SPECIFIC_PLATFORM", platform: platform },
       async (response) => {
+        setIsTransferring(false); // Turn off the text when finished
+
         if (response && response.tabsData?.[0]) {
           const data = response.tabsData[0];
           const detectedName = data.detectedPlaylistName || "Scanned Playlist";
@@ -182,7 +191,6 @@ useEffect(() => {
           }));
 
           try {
-            // NEW: Added 'overwrite: true' here
             await authFetch('https://musiccave-server.onrender.com/api/sync', {
               method: 'POST',
               body: JSON.stringify({ 
@@ -193,7 +201,6 @@ useEffect(() => {
               })
             });
             fetchStats();
-
             returnToDashboard();
 
           } catch (err) { console.error("Sync Error:", err); }
@@ -211,12 +218,11 @@ useEffect(() => {
 
   // --- 5. TRANSFER LOGIC ---
     const startTransfer = async () => {
-    // 1. Basic Validations
+   // 1. Basic Validations
     if (!targetService) { setErrorMsg("Please select a Target Service."); return; }
     
     const sourcePlatform = targetService === 'spotify' ? 'apple' : 'spotify';
     
-    // NEW: Figure out exactly which playlists the user clicked in the UI
     const destinationSelection = targetService === 'spotify' ? selectedSpotify : selectedApple;
     const sourceSelection = targetService === 'spotify' ? selectedApple : selectedSpotify;
     
@@ -229,7 +235,8 @@ useEffect(() => {
         return;
     }
 
-    const targetNameString = destinationSelection.name;
+    const targetNameString = destinationSelection.name; // Sends "LIBRARY_APPLE" or "LIKED_SPOTIFY" to the robot
+    const displayTargetName = destinationSelection.displayName || destinationSelection.name; // Shows "Favorite Songs" to user
     const sourceNameString = sourceSelection.name;
 
     // 2. Prepare for Transfer
@@ -257,31 +264,33 @@ useEffect(() => {
             return;
         }
 
-        setTransferStatus(`Checking ${targetNameString} for duplicates...`);
+        setTransferStatus(`Checking ${displayTargetName} for duplicates...`);
 
         // 3. Duplicate Prevention (Fetch existing songs in target from DB)
         const dbRes = await authFetch(`https://musiccave-server.onrender.com/api/songs/${targetService}?playlistName=${encodeURIComponent(targetNameString)}`);
-        const existingInTarget = await dbRes.json();
+        const dbTargetSongs = await dbRes.json() || [];
+        
+        // NEW: Pull from live cache as a fallback in case the database hasn't synced yet
+        const cachedTargetSongs = songCache[targetService]?.[targetNameString] || [];
+        const existingInTarget = [...dbTargetSongs, ...cachedTargetSongs];
 
         // 4. Filter songs using our new Fuzzy Matcher
         const filteredSongs = sourceSongsToTransfer.filter(sourceSong => {
-            // Check if this sourceSong exists ANYWHERE in the existing database array
             const isAlreadyThere = existingInTarget.some(dbSong => {
                 return isDuplicateSong(sourceSong, dbSong);
             });
-
-            // If it IS already there, filter it out (return false). If not, keep it (return true).
             return !isAlreadyThere;
         });
 
         if (filteredSongs.length === 0) {
-            setTransferStatus(`✅ "${targetNameString}" is already up to date!`);
+            setTransferStatus(`✅ "${displayTargetName}" is already up to date!`);
             setIsTransferring(false);
             return;
         }
 
+
         // 5. Start the Robot Loop
-        setTransferStatus(`Moving ${filteredSongs.length} new songs to "${targetNameString}"...`);
+        setTransferStatus(`Moving ${filteredSongs.length} new songs to "${displayTargetName}"...`);
         const action = targetService === 'spotify' ? "TRANSFER_SONG_TO_SPOTIFY" : "TRANSFER_SONG_TO_APPLE";
 
         for (let i = 0; i < filteredSongs.length; i++) {
@@ -386,34 +395,26 @@ const downloadMissingSongs = () => {
 };
 
 // --- FUZZY DUPLICATE CHECKER ---
-  // Returns TRUE if the songs are basically the same song
   const isDuplicateSong = (source, target) => {
     const sTitle = source.title.toLowerCase();
     const tTitle = target.title.toLowerCase();
     const sArtist = source.artist.toLowerCase();
     const tArtist = target.artist.toLowerCase();
 
-    // 1. Exact Match (Easiest)
     if (sTitle === tTitle && sArtist === tArtist) return true;
 
-    // 2. Bulletproof Title Cleaning
     const cleanTitle = (t) => {
-        return t
-            .split('(')[0]   // Remove anything after '('
-            .split('[')[0]   // Remove anything after '['
-            .split('-')[0]   // Remove anything after standard '-'
-            .split('–')[0]   // Remove anything after long en-dash '–'
-            .replace(/重制版/gi, '') // Strip Chinese 'Remastered' just in case
-            .trim();
+        return t.split('(')[0].split('[')[0].split('-')[0].split('–')[0].replace(/重制版/gi, '').trim();
     };
 
-    // 3. Smart Artist Cleaning (Fixes the MF DOOM & Kurious issue)
+    // FIX: Strictly isolate the very first artist to guarantee matches across platforms
     const cleanArtist = (a) => {
         return a
-            .replace(/[,&]/g, '')    // Strip commas and ampersands entirely
+            .split(',')[0]           // Take ONLY the very first artist before a comma
+            .split('&')[0]           // Or before an ampersand
+            .split(/feat\.?/i)[0]    // Or before featuring
+            .split(/ft\.?/i)[0]
             .replace(/\s+/g, ' ')    // Fix accidental double spaces
-            .split('feat')[0]        // Remove featuring artists
-            .split('ft.')[0]
             .trim();
     };
 
@@ -422,22 +423,16 @@ const downloadMissingSongs = () => {
     const sArtistClean = cleanArtist(sArtist);
     const tArtistClean = cleanArtist(tArtist);
 
-    // 4. Final Comparison
     if (sTitleClean === tTitleClean) {
-        // If titles match, check if artists are highly similar
         if (sArtistClean === tArtistClean) return true;
-        
-        // If one platform says "MF DOOM Kurious" and the other just says "MF DOOM"
         if (sArtistClean.includes(tArtistClean) || tArtistClean.includes(sArtistClean)) return true;
-        
-        // Compare just the very first word of the artist (e.g., "Fei" === "Fei")
         if (sArtistClean.split(' ')[0] === tArtistClean.split(' ')[0]) return true;
     }
 
     return false;
   };
 
-  // --- STYLING & HELPERS ---
+ // --- STYLING & HELPERS ---
   const getPlaylistIcon = (n) => (n.toLowerCase().includes("liked") || n.toLowerCase().includes("favourite")) ? "❤️" : "";
   const searchInputStyle = { width: "100%", padding: "8px", marginBottom: "10px", borderRadius: "5px", border: "none", backgroundColor: "#eee", fontSize: "14px", boxSizing: "border-box" };
   const navBtnStyle = { background: "none", border: "none", color: "white", cursor: "pointer", fontWeight: "bold", fontSize: "14px" };
@@ -448,6 +443,44 @@ const downloadMissingSongs = () => {
     const inCache = !!songCache[platform]?.[name];
     return inDb || inCache;
   };
+
+  // --- NEW: SORTED PLAYLISTS ARRAYS (SCANNED AT THE TOP & FILTERED) ---
+  const sortedApplePlaylists = applePlaylists
+    ?.filter(pl => {
+      const lowerName = pl.name.toLowerCase();
+      const searchMatch = lowerName.includes(appleSearch.toLowerCase());
+      // Check if it's the default favorite/library list
+      const isSystemList = lowerName.includes("favorite") || 
+                           lowerName.includes("favoriete") || 
+                           lowerName.includes("library") || 
+                           lowerName.includes("bibliotheek") || 
+                           lowerName === "library_apple";
+                           
+      return searchMatch && !isSystemList; // Keep it ONLY if it matches search AND is not a system list
+    })
+    ?.sort((a, b) => {
+      const aScanned = isPlaylistScanned('apple', a.name);
+      const bScanned = isPlaylistScanned('apple', b.name);
+      return aScanned === bScanned ? 0 : aScanned ? -1 : 1;
+    });
+
+  const sortedSpotifyPlaylists = spotifyPlaylists
+    ?.filter(pl => {
+      const lowerName = pl.name.toLowerCase();
+      const searchMatch = lowerName.includes(spotifySearch.toLowerCase());
+      // Check if it's the default liked songs list
+      const isSystemList = lowerName.includes("liked") || 
+                           lowerName.includes("gelikete") || 
+                           (lowerName.includes("nummers") && lowerName.includes("leuk")) || 
+                           lowerName === "liked_spotify";
+                           
+      return searchMatch && !isSystemList; // Keep it ONLY if it matches search AND is not a system list
+    })
+    ?.sort((a, b) => {
+      const aScanned = isPlaylistScanned('spotify', a.name);
+      const bScanned = isPlaylistScanned('spotify', b.name);
+      return aScanned === bScanned ? 0 : aScanned ? -1 : 1;
+    });
 
 if (!session) {
     return (
@@ -515,7 +548,7 @@ if (!session) {
             <h1 style={{ fontSize: "42px", margin: "0 0 10px 0" }}>Dashboard</h1>
             <h2 style={{ fontSize: "24px", fontWeight: "normal", marginTop: "0", color: "#ccc" }}>My Music Services</h2>
 
-            {isTransferring && <div style={{ color: "#1db954", fontSize: "20px", fontWeight: "bold", margin: "10px 0" }}>🤖 {transferStatus}</div>}
+            {isTransferring && <div style={{ color: "#1db954", fontSize: "20px", fontWeight: "bold", margin: "10px 0" }}>{transferStatus}</div>}
 
             <div style={{ display: "flex", justifyContent: "center", gap: "50px", marginTop: "30px" }}>
               <img src="/Applemusic_logo.png" alt="Apple Music" style={{ width: "120px", height: "120px", objectFit: "cover", borderRadius: "25px", border: targetService === 'apple' ? "4px solid #fa243c" : "none" }} />
@@ -527,39 +560,95 @@ if (!session) {
 
             <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-start", gap: "20px", marginTop: "30px", flexWrap: "wrap" }}>
               
-             {/* Apple Column */}
+{/* Apple Column */}
               <div style={{ backgroundColor: "#999", borderRadius: "10px", padding: "20px", width: "250px", minHeight: "300px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                 <div>
-                  <input type="text" placeholder="Search Apple..." value={appleSearch} onChange={(e) => setAppleSearch(e.target.value)} style={searchInputStyle} />
-                  <div style={{ maxHeight: "250px", overflowY: "auto" }} onScroll={() => setTooltipData(null)}>
-                   {applePlaylists?.filter(pl => pl.name.toLowerCase().includes(appleSearch.toLowerCase())).map((pl, idx) => {
-                      return (
-                        <div 
-                          key={idx} 
-                          onMouseEnter={(e) => {
-                            // Gets exact coordinates of your mouse/button
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setTooltipData({
-                              scanned: isPlaylistScanned('apple', pl.name),
-                              x: rect.left,
-                              y: rect.top + (rect.height / 2)
-                            });
-                          }}
-                          onMouseLeave={() => setTooltipData(null)}
-                          onClick={() => setSelectedApple(pl)} 
-                          style={{ 
-                            backgroundColor: selectedApple?.name === pl.name ? "#b31b2d" : "#fa243c", 
-                            padding: "10px", borderRadius: "5px", marginBottom: "10px", 
-                            color: "#fff", cursor: "pointer", 
-                            border: selectedApple?.name === pl.name ? "2px solid white" : "none" 
-                          }}
-                        >
-                          {/* BUBBLE WAS MOVED OUT OF HERE */}
-                          <span>{getPlaylistIcon(pl.name)}</span> {pl.name}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {!applePlaylists ? (
+                    /* 0. PRE-SCAN PLACEHOLDER */
+                    <div style={{ backgroundColor: "#222", padding: "20px", borderRadius: "8px", textAlign: "center", color: "#ccc", display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "220px", border: "2px solid #6a0dad" }}>
+                      <p style={{ fontSize: "14px", lineHeight: "1.6", margin: "0 0 15px 0", fontWeight: "bold" }}>
+                        MusicCave needs to scan your playlists before you can start transferring.
+                      </p>
+                      <strong 
+                        onClick={() => scanPlatform('apple')} 
+                        style={{ color: "#6a0dad", fontSize: "18px", cursor: "pointer", textDecoration: "underline" }}
+                      >
+                        Scan now!
+                      </strong>
+                    </div>
+                  ) : (
+                    <>
+                      {/* 1. SEARCH BAR AT THE VERY TOP */}
+                      <input type="text" placeholder="Search Apple..." value={appleSearch} onChange={(e) => setAppleSearch(e.target.value)} style={searchInputStyle} />
+                      
+                      {/* 2. DEDICATED FAVORITE SONGS BOX WITH HOVER BUBBLE */}
+                      <div 
+                        onMouseEnter={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setTooltipData({
+                            scanned: isPlaylistScanned('apple', 'LIBRARY_APPLE'),
+                            x: rect.left,
+                            y: rect.top + (rect.height / 2)
+                          });
+                        }}
+                        onMouseLeave={() => setTooltipData(null)}
+                        onClick={() => setSelectedApple({ name: "LIBRARY_APPLE", displayName: "Favorite Songs" })}
+                        style={{
+                          backgroundColor: selectedApple?.name === "LIBRARY_APPLE" ? "#b31b2d" : "#fa243c",
+                          padding: "15px", borderRadius: "8px", marginBottom: "15px", color: "#fff",
+                          cursor: "pointer", border: selectedApple?.name === "LIBRARY_APPLE" ? "2px solid white" : "none",
+                          fontWeight: "bold", display: "flex", justifyContent: "space-between", alignItems: "center"
+                        }}
+                      >
+                        <span>❤️ Favorite Songs</span>
+                        <span style={{ fontSize: "14px", textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000" }}>
+                            {isPlaylistScanned('apple', 'LIBRARY_APPLE') ? "✅" : "❌"}
+                        </span>
+                      </div>
+
+                      {/* 3. SCROLLABLE PLAYLIST LIST */}
+                      <div style={{ maxHeight: "250px", overflowY: "auto" }} onScroll={() => setTooltipData(null)}>
+                       {sortedApplePlaylists?.map((pl, idx) => {
+                          const isScanned = isPlaylistScanned('apple', pl.name);
+                          return (
+                            <div 
+                              key={idx} 
+                              onMouseEnter={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setTooltipData({
+                                  scanned: isScanned,
+                                  x: rect.left,
+                                  y: rect.top + (rect.height / 2)
+                                });
+                              }}
+                              onMouseLeave={() => setTooltipData(null)}
+                              onClick={() => setSelectedApple(pl)} 
+                              style={{ 
+                                backgroundColor: selectedApple?.name === pl.name ? "#b31b2d" : "#fa243c", 
+                                padding: "10px", borderRadius: "5px", marginBottom: "10px", 
+                                color: "#fff", cursor: "pointer", 
+                                border: selectedApple?.name === pl.name ? "2px solid white" : "none",
+                                display: "flex", 
+                                justifyContent: "space-between", 
+                                alignItems: "center"
+                              }}
+                            >
+                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <span>{getPlaylistIcon(pl.name)}</span> {pl.name}
+                              </div>
+                              <span style={{ 
+                                fontSize: "14px", 
+                                marginLeft: "10px",
+                                textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000"
+                              }}>
+                                {isScanned ? "✅" : "❌"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
                 <button onClick={() => scanPlatform('apple')} style={{ backgroundColor: "#6a0dad", color: "white", border: "none", padding: "10px", borderRadius: "5px", cursor: "pointer", marginTop: "20px", fontWeight: "bold" }}>Scan Apple Music</button>
               </div>
@@ -574,34 +663,92 @@ if (!session) {
               {/* Spotify Column */}
               <div style={{ backgroundColor: "#999", borderRadius: "10px", padding: "20px", width: "250px", minHeight: "300px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                 <div>
-                  <input type="text" placeholder="Search Spotify..." value={spotifySearch} onChange={(e) => setSpotifySearch(e.target.value)} style={searchInputStyle} />
-                  <div style={{ maxHeight: "250px", overflowY: "auto" }} onScroll={() => setTooltipData(null)}>
-                    {spotifyPlaylists?.filter(pl => pl.name.toLowerCase().includes(spotifySearch.toLowerCase())).map((pl, idx) => {
-                      return (
-                        <div 
-                          key={idx} 
-                          onMouseEnter={(e) => {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setTooltipData({
-                              scanned: isPlaylistScanned('spotify', pl.name),
-                              x: rect.left,
-                              y: rect.top + (rect.height / 2)
-                            });
-                          }}
-                          onMouseLeave={() => setTooltipData(null)}
-                          onClick={() => setSelectedSpotify(pl)} 
-                          style={{ 
-                            backgroundColor: selectedSpotify?.name === pl.name ? "#15833b" : "#1db954", 
-                            padding: "10px", borderRadius: "5px", marginBottom: "10px", 
-                            color: "#000", fontWeight: "500", cursor: "pointer", 
-                            border: selectedSpotify?.name === pl.name ? "2px solid black" : "none" 
-                          }}
-                        >
-                          <span>{getPlaylistIcon(pl.name)}</span> {pl.name}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {!spotifyPlaylists ? (
+                    /* 0. PRE-SCAN PLACEHOLDER */
+                    <div style={{ backgroundColor: "#222", padding: "20px", borderRadius: "8px", textAlign: "center", color: "#ccc", display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "220px", border: "2px solid #6a0dad" }}>
+                      <p style={{ fontSize: "14px", lineHeight: "1.6", margin: "0 0 15px 0", fontWeight: "bold" }}>
+                        MusicCave needs to scan your playlists before you can start transferring.
+                      </p>
+                      <strong 
+                        onClick={() => scanPlatform('spotify')} 
+                        style={{ color: "#6a0dad", fontSize: "18px", cursor: "pointer", textDecoration: "underline" }}
+                      >
+                        Scan now!
+                      </strong>
+                    </div>
+                  ) : (
+                    <>
+                      {/* 1. SEARCH BAR AT THE VERY TOP */}
+                      <input type="text" placeholder="Search Spotify..." value={spotifySearch} onChange={(e) => setSpotifySearch(e.target.value)} style={searchInputStyle} />
+                      
+                      {/* 2. DEDICATED LIKED SONGS BOX WITH HOVER BUBBLE */}
+                      <div 
+                        onMouseEnter={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setTooltipData({
+                            scanned: isPlaylistScanned('spotify', 'LIKED_SPOTIFY'),
+                            x: rect.left,
+                            y: rect.top + (rect.height / 2)
+                          });
+                        }}
+                        onMouseLeave={() => setTooltipData(null)}
+                        onClick={() => setSelectedSpotify({ name: "LIKED_SPOTIFY", displayName: "Liked Songs" })}
+                        style={{
+                          backgroundColor: selectedSpotify?.name === "LIKED_SPOTIFY" ? "#15833b" : "#1db954",
+                          padding: "15px", borderRadius: "8px", marginBottom: "15px", color: "#000",
+                          cursor: "pointer", border: selectedSpotify?.name === "LIKED_SPOTIFY" ? "2px solid black" : "none",
+                          fontWeight: "bold", display: "flex", justifyContent: "space-between", alignItems: "center"
+                        }}
+                      >
+                        <span>❤️ Liked Songs</span>
+                        <span style={{ fontSize: "14px", textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000" }}>
+                            {isPlaylistScanned('spotify', 'LIKED_SPOTIFY') ? "✅" : "❌"}
+                        </span>
+                      </div>
+
+                      {/* 3. SCROLLABLE PLAYLIST LIST */}
+                      <div style={{ maxHeight: "250px", overflowY: "auto" }} onScroll={() => setTooltipData(null)}>
+                        {sortedSpotifyPlaylists?.map((pl, idx) => {
+                          const isScanned = isPlaylistScanned('spotify', pl.name);
+                          return (
+                            <div 
+                              key={idx} 
+                              onMouseEnter={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setTooltipData({
+                                  scanned: isScanned,
+                                  x: rect.left,
+                                  y: rect.top + (rect.height / 2)
+                                });
+                              }}
+                              onMouseLeave={() => setTooltipData(null)}
+                              onClick={() => setSelectedSpotify(pl)} 
+                              style={{ 
+                                backgroundColor: selectedSpotify?.name === pl.name ? "#15833b" : "#1db954", 
+                                padding: "10px", borderRadius: "5px", marginBottom: "10px", 
+                                color: "#000", fontWeight: "500", cursor: "pointer", 
+                                border: selectedSpotify?.name === pl.name ? "2px solid black" : "none",
+                                display: "flex", 
+                                justifyContent: "space-between", 
+                                alignItems: "center"
+                              }}
+                            >
+                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <span>{getPlaylistIcon(pl.name)}</span> {pl.name}
+                              </div>
+                              <span style={{ 
+                                fontSize: "14px", 
+                                marginLeft: "10px",
+                                textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000"
+                              }}>
+                                {isScanned ? "✅" : "❌"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
                 <button onClick={() => scanPlatform('spotify')} style={{ backgroundColor: "#6a0dad", color: "white", border: "none", padding: "10px", borderRadius: "5px", cursor: "pointer", marginTop: "20px", fontWeight: "bold" }}>Scan Spotify</button>
               </div>
@@ -609,7 +756,7 @@ if (!session) {
              {/* Start & Cancel Buttons */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: "100px" }}>
                 {!isTransferring ? (
-                  <button onClick={startTransfer} style={{ backgroundColor: "#1db954", color: "#fff", border: "none", padding: "15px 30px", borderRadius: "50px", fontWeight: "bold", cursor: "pointer" }}>
+                  <button onClick={startTransfer} style={{ backgroundColor: "#1db954", color: "#000", border: "none", padding: "15px 30px", borderRadius: "50px", fontWeight: "bold", cursor: "pointer" }}>
                     START TRANSFER
                   </button>
                 ) : (
@@ -634,10 +781,10 @@ if (!session) {
               src={tooltipData.scanned ? "/Textbubble_scanned.png" : "/Textbubble_notscanned.png"} 
               alt="Scan Status"
               style={{ 
-                position: "fixed",           // This is the magic that prevents clipping!
-                left: tooltipData.x - 175,   // Puts it 15px to the left of the button
-                top: tooltipData.y,          // Exact Y coordinate of the hovered button
-                transform: "translateY(-70%)", 
+                position: "fixed",           
+                left: tooltipData.x - 175,   
+                top: tooltipData.y,          
+                transform: "translateY(-80%)", 
                 width: "160px", 
                 zIndex: 9999,                
                 pointerEvents: "none"        

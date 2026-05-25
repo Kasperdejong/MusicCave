@@ -67,6 +67,53 @@ function removeProgressUI() {
     if (overlay) overlay.remove();
 }
 
+// ==========================================
+// UI: SCAN PROGRESS
+// ==========================================
+function renderScanProgressUI(songCount, playlistCount) {
+    let overlay = document.getElementById("musiccave-scan-ui");
+    
+    if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "musiccave-scan-ui";
+        overlay.style.cssText = `
+            position: fixed; bottom: 30px; right: 30px; width: 300px;
+            background-color: #222; border: 2px solid #6a0dad; border-radius: 12px;
+            padding: 15px; z-index: 2147483647; color: white; font-family: sans-serif;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        `;
+        
+        overlay.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <strong style="font-size: 16px;">MusicCave Scanner</strong>
+            </div>
+            <div style="color: #1db954; font-weight: bold; margin-bottom: 10px; font-size: 14px;">Scrolling page...</div>
+            <div style="font-size: 13px; color: #aaa; margin-bottom: 5px;">Songs Found: <span id="musiccave-scan-songs" style="color:#fff; font-weight:bold; font-size: 16px;">0</span></div>
+            <div style="font-size: 13px; color: #aaa; margin-bottom: 15px;">Playlists Found: <span id="musiccave-scan-playlists" style="color:#fff; font-weight:bold; font-size: 16px;">0</span></div>
+            <button id="musiccave-scan-cancel-btn" style="width: 100%; background-color: #ff4d4d; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
+                ⏹ FINISH EARLY
+            </button>
+        `;
+        document.body.appendChild(overlay);
+
+        document.getElementById("musiccave-scan-cancel-btn").addEventListener("click", () => {
+            globalCancelFlag = true;
+            const btn = document.getElementById("musiccave-scan-cancel-btn");
+            btn.innerText = "Wrapping up...";
+            btn.style.backgroundColor = "#555";
+        });
+    }
+    
+    // Live update the numbers
+    document.getElementById("musiccave-scan-songs").innerText = songCount;
+    document.getElementById("musiccave-scan-playlists").innerText = playlistCount;
+}
+
+function removeScanProgressUI() {
+    const overlay = document.getElementById("musiccave-scan-ui");
+    if (overlay) overlay.remove();
+}
+
 // Helper for Visual Debugging (Outlines)
 function highlightElement(el, color = "#fa243c") {
     if (!el) return;
@@ -83,7 +130,16 @@ function getCleanSearchQuery(song) {
     let cleanTitle = song.title
         .split(' - ')[0].split(' (')[0].split(' [')[0]  
         .replace(/remaster(ed)?/gi, '').trim();
-    return `${cleanTitle} ${song.artist}`;
+        
+    // FIX: Only use the primary artist to prevent search failures on Apple Music
+    let mainArtist = song.artist
+        .split(',')[0]
+        .split(' & ')[0]
+        .split(/feat\.?/i)[0]
+        .split(/ft\.?/i)[0]
+        .trim();
+        
+    return `${cleanTitle} ${mainArtist}`;
 }
 
 // ==========================================
@@ -118,15 +174,25 @@ async function commitSelection(element = null) {
     console.log("Robot: Committing selection on:", target);
     highlightElement(target, "#1db954");
     
-    const mouseOpts = { bubbles: true, cancelable: true, view: window, buttons: 1 };
-    target.dispatchEvent(new MouseEvent('mousedown', mouseOpts));
-    target.dispatchEvent(new MouseEvent('mouseup', mouseOpts));
+    const eventOpts = { bubbles: true, cancelable: true, view: window, buttons: 1 };
+
+    // UPGRADE: Simulate modern Pointer Events (Required for Apple Music)
+    if (typeof PointerEvent !== 'undefined') {
+        target.dispatchEvent(new PointerEvent('pointerdown', eventOpts));
+        target.dispatchEvent(new PointerEvent('pointerup', eventOpts));
+    }
+    
+    // Standard Mouse Events
+    target.dispatchEvent(new MouseEvent('mousedown', eventOpts));
+    target.dispatchEvent(new MouseEvent('mouseup', eventOpts));
     target.click();
     
-    const eventParams = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
-    target.dispatchEvent(new KeyboardEvent('keydown', eventParams));
-    target.dispatchEvent(new KeyboardEvent('keypress', eventParams));
-    target.dispatchEvent(new KeyboardEvent('keyup', eventParams));
+    // Standard Keyboard Events
+    const keyOpts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
+    target.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
+    target.dispatchEvent(new KeyboardEvent('keypress', keyOpts));
+    target.dispatchEvent(new KeyboardEvent('keyup', keyOpts));
+    
     await sleep(500);
 }
 
@@ -167,14 +233,14 @@ async function triggerAppleSearch(input) {
 // ==========================================
 
 async function deepScrape() {
+    globalCancelFlag = false;
     const isSpotify = window.location.href.includes('spotify');
     console.log(`MusicCave: Starting Deep Scrape for ${isSpotify ? 'Spotify' : 'Apple'}...`);
     
-    // --- 1. DETECT PLAYLIST NAME (FIXED SELECTORS) ---
+ // --- 1. DETECT PLAYLIST NAME (FIXED SELECTORS) ---
     let detectedName = "Unknown Playlist";
     try {
         if (isSpotify) {
-            // Target the H1 specifically in the main content area
             const h1 = document.querySelector('main h1[data-testid="type-entity-title"], main h1');
             if (h1) detectedName = h1.innerText.trim();
         } else {
@@ -182,6 +248,16 @@ async function deepScrape() {
             if (h1) detectedName = h1.innerText.trim();
         }
     } catch (e) { console.error("Robot: Name detection failed", e); }
+    
+    // ==========================================
+    // NEW: STANDARDIZE LIKED/FAVORITE NAMES
+    // ==========================================
+    const lowerName = detectedName.toLowerCase();
+    if (isSpotify && (lowerName.includes("liked") || lowerName.includes("gelikete") || lowerName.includes("leuk"))) {
+        detectedName = "LIKED_SPOTIFY";
+    } else if (!isSpotify && (lowerName.includes("favorite") || lowerName.includes("favoriete") || lowerName.includes("library") || lowerName.includes("bibliotheek"))) {
+        detectedName = "LIBRARY_APPLE";
+    }
     
     console.log("Robot: Detected Name ->", detectedName);
 
@@ -193,6 +269,10 @@ async function deepScrape() {
 
     for (let i = 0; i < 200; i++) {
         // --- 2. SCRAPE VISIBLE DATA ---
+        if (globalCancelFlag) {
+            console.log("MusicCave: Scan cancelled early by user.");
+            break;
+        }
         if (isSpotify) {
             // Restored Spotify Track Scrape
             document.querySelectorAll('[data-testid="tracklist-row"]').forEach(row => {
@@ -238,6 +318,18 @@ async function deepScrape() {
         // RESTORED ORIGINAL LOGS
         console.log(`Scrape Progress: ${allSongs.size} songs | ${foundPlaylists.size} playlists.`);
 
+        // NEW: Send live progress to background.js so the React app can see it
+        try {
+            chrome.runtime.sendMessage({
+                action: "UPDATE_SCAN_PROGRESS",
+                payload: { songs: allSongs.size, playlists: foundPlaylists.size }
+            });
+        } catch(e) {
+            console.log("Could not send progress", e);
+        }
+
+        renderScanProgressUI(allSongs.size, foundPlaylists.size);
+
         // --- 3. SCROLL LOGIC ---
         if (isSpotify) {
             const songRows = document.querySelectorAll('[data-testid="tracklist-row"]');
@@ -278,7 +370,9 @@ async function deepScrape() {
         lastSongCount = allSongs.size;
         lastPlaylistCount = foundPlaylists.size;
     }
-    
+
+    removeScanProgressUI();
+
     return { 
         songs: Array.from(allSongs.values()), 
         playlists: Array.from(foundPlaylists.values()),
@@ -611,6 +705,243 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
 }
 
 // ==========================================
+// NEW: APPLE LIBRARY INJECTION
+// ==========================================
+
+// ==========================================
+// NEW: APPLE FAVORITES INJECTION (Keyboard Navigation Mode)
+// ==========================================
+async function executeAppleLibraryInjection(song, sendResponse) {
+    try {
+        const searchQuery = getCleanSearchQuery(song);
+        console.log(`Robot: Starting Apple Favorites injection for: ${song.title}`);
+
+        // 1. Search Logic
+        let searchInput = document.querySelector('input[type="search"]');
+        if (!searchInput) {
+            const searchLink = document.querySelector('a[href*="/search"]');
+            if (searchLink) searchLink.click();
+            await sleep(2000); 
+            searchInput = document.querySelector('input[type="search"]');
+        }
+        if (!searchInput) throw new Error("Search bar not found");
+
+        await typeIntoAppleInput(searchInput, searchQuery);
+        await triggerAppleSearch(searchInput);
+        await sleep(4000); 
+
+        // 2. Find Song Row
+        const rows = document.querySelectorAll('main [role="row"], main .songs-list-row, main .grid-item');
+        let songRow = Array.from(rows).find(row => 
+            row.innerText.toLowerCase().includes(song.title.split(' - ')[0].toLowerCase())
+        );
+
+        if (!songRow) throw new Error(`Song not found.`);
+        songRow.scrollIntoView({ block: 'center' });
+        
+        // 3. Open More Menu
+        const rowButtons = Array.from(songRow.querySelectorAll('button'));
+        let targetMoreBtn = null;
+        for (let btn of rowButtons) {
+            const isMore = btn.classList.contains('contextual-menu__trigger') || 
+                           btn.querySelector('[data-testid="more-button"]') ||
+                           btn.getAttribute('aria-label')?.toLowerCase().includes('meer') ||
+                           btn.getAttribute('aria-label')?.toLowerCase().includes('more');
+            if (isMore) {
+                targetMoreBtn = btn;
+                targetMoreBtn.focus();
+                await commitSelection(targetMoreBtn);
+                break;
+            }
+        }
+        if (!targetMoreBtn) throw new Error("More button not found.");
+        await sleep(1500); // Crucial wait for the context menu to render in the DOM
+
+        // 4. Keyboard Navigation (Tabbing down like a human)
+        console.log("Robot: Tabbing down to find Favorite...");
+        let foundBtn = false;
+        let isAlreadyAdded = false;
+
+        for (let i = 0; i < 20; i++) {
+            // Get the currently highlighted item
+            const focused = document.activeElement;
+            const txt = (focused.innerText + " " + (focused.getAttribute('title') || "") + " " + (focused.getAttribute('aria-label') || "")).toLowerCase();
+            
+            console.log(`Robot: Currently focused on: "${txt}"`);
+
+            // Match Favorite/Favoriet
+            if (txt.includes('favorite') || txt.includes('favoriet')) {
+                
+                // If the button says "Undo" or "Ongedaan", it's already favorited!
+                if (txt.includes('undo') || txt.includes('ongedaan') || txt.includes('unfavorite')) {
+                    isAlreadyAdded = true;
+                }
+
+                if (isAlreadyAdded) {
+                    console.log("Robot: Song is already in Apple Favorites. Skipping and marking as success!");
+                    // Sending "Success" makes the dashboard save it to the DB so we don't scan it again later
+                    sendResponse({ status: "Success" });
+                    return;
+                }
+
+                console.log("Robot: Favorite Match found! Committing...");
+                highlightElement(focused, "#1db954");
+                await sleep(400);
+                
+                // Hit Enter on the focused element
+                await commitSelection(focused);
+                foundBtn = true;
+                break;
+            }
+
+            // Move down to the next item in the menu
+            sendKey(focused, 'ArrowDown');
+            await sleep(400);
+        }
+
+        if (!foundBtn) throw new Error("'Favorite' option not found in menu.");
+
+        console.log("Robot: Successfully added to Apple Favorites.");
+        sendResponse({ status: "Success" });
+
+    } catch (err) {
+        if (err.message === "CANCELLED_BY_USER") {
+            sendResponse({ status: "Cancelled", message: "User cancelled from popup" });
+        } else {
+            sendResponse({ status: "Error", message: err.toString() });
+        }
+    }
+}
+
+// ==========================================
+// NEW: SPOTIFY LIKED SONGS INJECTION
+// ==========================================
+async function executeSpotifyLikedInjection(song, sendResponse) {
+    try {
+        const searchQuery = getCleanSearchQuery(song);
+        const baseCleanTitle = song.title.split(' - ')[0].split(' (')[0].split(' [')[0].replace(/remaster(ed)?/gi, '').trim().toLowerCase();
+
+        console.log(`Robot: Starting Spotify Liked Songs injection for ${searchQuery}`);
+        document.body.click(); 
+        await sleep(1000);
+
+        // 1. Search Logic
+        let searchInput = document.querySelector('input[data-testid="search-input"]');
+        if (!searchInput) {
+            const searchLink = document.querySelector('a[href="/search"], a[href="/zoeken"]');
+            if (searchLink) searchLink.click();
+            await sleep(1500);
+            searchInput = document.querySelector('input[data-testid="search-input"]');
+        }
+        if (!searchInput) throw new Error("Search bar not found");
+
+        await typeIntoInput(searchInput, searchQuery);
+        sendKey(searchInput, 'Enter');
+        await sleep(3000); 
+
+        // 2. Click Songs Filter
+        let filterClicked = false;
+        for (let i = 0; i < 10; i++) {
+            const possibleChips = document.querySelectorAll('button span[class*="chip"], button');
+            const targetChip = Array.from(possibleChips).find(el => {
+                const txt = el.innerText?.trim().toLowerCase() || "";
+                return txt === "nummers" || txt === "songs" || txt === "tracks";
+            });
+            if (targetChip) {
+                const clickable = targetChip.closest('button') || targetChip;
+                clickable.click();
+                filterClicked = true;
+                break;
+            }
+            await sleep(400);
+        }
+        if (filterClicked) await sleep(2000);
+
+        // 3. Find Row
+        let targetRow = null;
+        for (let i = 0; i < 15; i++) {
+            const rows = document.querySelectorAll('main [data-testid="tracklist-row"], [role="row"]');
+            const visibleRows = Array.from(rows).filter(row => row.getBoundingClientRect().left > 250);
+            
+            if (visibleRows.length > 0) {
+                targetRow = visibleRows.find(row => row.innerText.toLowerCase().includes(song.title.split(' - ')[0].toLowerCase())) 
+                         || visibleRows.find(row => row.innerText.toLowerCase().includes(baseCleanTitle))
+                         || visibleRows[0];
+            }
+            if (targetRow) break;
+            await sleep(400);
+        }
+        if (!targetRow) throw new Error(`Song result not found.`);
+
+        targetRow.scrollIntoView({ block: 'center' });
+        await sleep(600);
+
+        // 4. Open Context Menu
+        const moreBtn = targetRow.querySelector('button[data-testid="more-button"], [aria-haspopup="menu"]');
+        if (moreBtn) moreBtn.click();
+        else targetRow.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2 }));
+        await sleep(1500); 
+
+        // 5. Look for Liked Songs / Nummers leuk
+        console.log("Robot: Looking for Liked Songs button...");
+        let addBtn = null;
+        let isAlreadyAdded = false;
+
+        for (let i = 0; i < 10; i++) {
+            const items = document.querySelectorAll('[role="menuitem"], li, button, span');
+            for (let el of items) {
+                const t = el.innerText.toLowerCase();
+                
+                // Match Liked/Gelikete/Leuk
+                if (t.includes('liked') || t.includes('gelikete') || (t.includes('nummers') && t.includes('leuk'))) {
+                    
+                    // If the button says "Remove" or "Verwijder", it's already added!
+                    if (t.includes('remove') || t.includes('verwijder') || t.includes('delete')) {
+                        isAlreadyAdded = true;
+                    }
+                    addBtn = el;
+                    break;
+                }
+            }
+            if (addBtn) break;
+            await sleep(400);
+        }
+
+     if (isAlreadyAdded) {
+            console.log("Robot: Song is already in Spotify Liked Songs. Skipping and marking as success!");
+            sendResponse({ status: "Success" });
+            return;
+        }
+
+        if (!addBtn) throw new Error("'Save to Liked Songs' not found.");
+
+        // FIX: The menu item is an <li>, but Spotify requires the <button> inside it to be clicked
+        let targetButton = addBtn;
+        if (addBtn.tagName !== 'BUTTON') {
+            const btnInside = addBtn.querySelector('button');
+            if (btnInside) targetButton = btnInside;
+        }
+
+        targetButton.focus();
+        highlightElement(targetButton, "#1db954");
+        await sleep(800);
+        
+        // Force native click AND commit selection on the exact button element
+        targetButton.click();
+        await commitSelection(targetButton);
+        
+        console.log("Robot: Successfully added to Spotify Liked Songs.");
+        sendResponse({ status: "Success" });
+
+    } catch (err) {
+        if (err.message === "CANCELLED_BY_USER") {
+            sendResponse({ status: "Cancelled", message: "User cancelled from popup" });
+        } else {
+            sendResponse({ status: "Error", message: err.toString() });
+        }
+    }
+}
+// ==========================================
 // 6. ROUTING
 // ==========================================
 
@@ -624,14 +955,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         renderProgressUI(request.song, request.progress); // Draw UI
 
         if (window.location.href.includes('spotify.com')) {
-            executeSpotifyInjection(request.song, request.targetName, sendResponse);
+            // Check for special Liked Songs target
+            if (request.targetName === 'LIKED_SPOTIFY') {
+                executeSpotifyLikedInjection(request.song, sendResponse);
+            } else {
+                executeSpotifyInjection(request.song, request.targetName, sendResponse);
+            }
         } else if (window.location.href.includes('apple.com')) {
-            executeAppleInjection(request.song, request.targetName, sendResponse);
+            // Check for special Library target
+            if (request.targetName === 'LIBRARY_APPLE') {
+                executeAppleLibraryInjection(request.song, sendResponse);
+            } else {
+                executeAppleInjection(request.song, request.targetName, sendResponse);
+            }
         }
         return true; 
     }
     if (request.action === "REMOVE_UI") {
         removeProgressUI();
+        removeScanProgressUI();
         sendResponse({ status: "Success" });
         return true;
     }
