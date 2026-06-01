@@ -525,7 +525,6 @@ if (!session) {
   return (
     <div style={{ backgroundColor: "#222", color: "#fff", minHeight: "100vh", fontFamily: "sans-serif", paddingBottom: "50px" }}>
       
-      {/* HEADER */}
       <div style={{ backgroundColor: "#6a0dad", padding: "15px 30px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "20px", fontWeight: "bold" }}>
           <img src="/Logo.png" alt="MusicCave Logo" style={{ height: "35px" }} />
@@ -534,6 +533,8 @@ if (!session) {
         <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
           <button onClick={() => setView("dashboard")} style={navBtnStyle}>Dashboard</button>
           <button onClick={() => setView("history")} style={navBtnStyle}>History</button>
+          <button onClick={() => setView("privacy")} style={navBtnStyle}>Privacy</button>
+          
           <div style={{ backgroundColor: "rgba(255,255,255,0.1)", padding: "5px 15px", borderRadius: "20px", fontSize: "12px", border: "1px solid rgba(255,255,255,0.3)" }}>
             <span style={{ color: "#1db954", fontWeight: "bold" }}>●</span> {totalSynced} Songs Synced
           </div>
@@ -541,7 +542,6 @@ if (!session) {
           <button onClick={() => supabase.auth.signOut()} style={{...navBtnStyle, opacity: 0.7}}>Logout</button>
         </div>
       </div>
-
       {view === "dashboard" ? (
         <>
           <div style={{ textAlign: "center", marginTop: "40px" }}>
@@ -830,7 +830,7 @@ if (!session) {
             </div>
           </div>
         </>
-      ) : (
+     ) : view === "history" ? (
         /* HISTORY VIEW */
         <div style={{ padding: "40px", maxWidth: "800px", margin: "0 auto" }}>
           <h1 style={{ fontSize: "32px", marginBottom: "30px", textAlign: "center" }}>Transfer History</h1>
@@ -854,6 +854,27 @@ if (!session) {
               ))}
             </div>
           )}
+        </div>
+      ) : (
+        /* PRIVACY VIEW */
+        <div style={{ padding: "50px", maxWidth: "800px", margin: "40px auto", backgroundColor: "#333", borderRadius: "15px", border: "1px solid #444", boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
+          <h1 style={{ fontSize: "32px", marginBottom: "10px", color: "#fff", textAlign: "center" }}>Privacy Policy</h1>
+          <p style={{ color: "#aaa", textAlign: "center", marginBottom: "40px" }}>Last Updated: May 25</p>
+
+          <h3 style={{ color: "#1db954", marginBottom: "10px" }}>1. Data Collection</h3>
+          <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>The MusicCave Bridge extension does not collect, transmit, distribute, or sell your personal data. All processes required to read playlist data and navigate the user interface happen entirely locally on your own computer.</p>
+
+          <h3 style={{ color: "#1db954", marginBottom: "10px" }}>2. Account Security</h3>
+          <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>The extension does not ask for, read, or store your passwords for Spotify or Apple Music. It relies on your browser's existing authenticated sessions to function.</p>
+
+          <h3 style={{ color: "#1db954", marginBottom: "10px" }}>3. External Servers</h3>
+          <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>The extension communicates solely with the official MusicCave web application to receive transfer instructions. No song data or browsing history is sent to third-party advertising or tracking servers.</p>
+
+          <h3 style={{ color: "#1db954", marginBottom: "10px" }}>4. Permissions</h3>
+          <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>The extension requests access to "tabs" and "scripting" strictly for the domains music.apple.com and open.spotify.com. These permissions are used exclusively to read song titles and assist with UI navigation during an active migration session.</p>
+
+          <h3 style={{ color: "#1db954", marginBottom: "10px" }}>5. Contact</h3>
+          <p style={{ color: "#ccc", lineHeight: "1.6" }}>If you have any questions regarding this privacy policy, please contact the developer (ME!) via the Chrome Web Store support tab.</p>
         </div>
       )}
       {/* RESULTS MODAL */}
