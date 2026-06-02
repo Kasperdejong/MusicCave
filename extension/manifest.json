@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "MusicCave Bridge",
+  "name": "MusicCave",
   "version": "1.0",
   "description": "Connects MusicCave React App to Apple Music & Spotify DOM.",
   "permissions":[

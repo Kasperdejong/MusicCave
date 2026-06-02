@@ -862,7 +862,7 @@ if (!session) {
           <p style={{ color: "#aaa", textAlign: "center", marginBottom: "40px" }}>Last Updated: May 25</p>
 
           <h3 style={{ color: "#1db954", marginBottom: "10px" }}>1. Data Collection</h3>
-          <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>The MusicCave Bridge extension does not collect, transmit, distribute, or sell your personal data. All processes required to read playlist data and navigate the user interface happen entirely locally on your own computer.</p>
+          <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>The MusicCave extension does not collect, transmit, distribute, or sell your personal data. All processes required to read playlist data and navigate the user interface happen entirely locally on your own computer.</p>
 
           <h3 style={{ color: "#1db954", marginBottom: "10px" }}>2. Account Security</h3>
           <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>The extension does not ask for, read, or store your passwords for Spotify or Apple Music. It relies on your browser's existing authenticated sessions to function.</p>
