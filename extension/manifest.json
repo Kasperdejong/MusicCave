@@ -21,6 +21,9 @@
       "js": ["content.js"]
     }
   ],
+  "icons": {
+    "128": "LogoMusicCave.png"
+  },
   "externally_connectable": {
     "matches": [
       "http://localhost:5173/*",

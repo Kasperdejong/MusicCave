@@ -859,7 +859,7 @@ if (!session) {
         /* PRIVACY VIEW */
         <div style={{ padding: "50px", maxWidth: "800px", margin: "40px auto", backgroundColor: "#333", borderRadius: "15px", border: "1px solid #444", boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
           <h1 style={{ fontSize: "32px", marginBottom: "10px", color: "#fff", textAlign: "center" }}>Privacy Policy</h1>
-          <p style={{ color: "#aaa", textAlign: "center", marginBottom: "40px" }}>Last Updated: May 25</p>
+          <p style={{ color: "#aaa", textAlign: "center", marginBottom: "40px" }}>Last Updated: June 2 2026</p>
 
           <h3 style={{ color: "#1db954", marginBottom: "10px" }}>1. Data Collection</h3>
           <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>The MusicCave extension does not collect, transmit, distribute, or sell your personal data. All processes required to read playlist data and navigate the user interface happen entirely locally on your own computer.</p>
