@@ -94,4 +94,16 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         sendResponse({status: "Success"});
         return true;
     }
+    // ACTION 5: INSTANT KILL SWITCH
+    if (request.action === "ABORT_TRANSFER") {
+        chrome.tabs.query({}, (tabs) => {
+            tabs.forEach(tab => {
+                chrome.tabs.sendMessage(tab.id, { action: "ABORT_CURRENT_ACTION" }, () => {
+                    let ignore = chrome.runtime.lastError; 
+                });
+            });
+        });
+        sendResponse({status: "Success"});
+        return true;
+    }
 });

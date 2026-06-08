@@ -49,10 +49,12 @@ function renderProgressUI(song, progress) {
         `;
         document.body.appendChild(overlay);
 
-        document.getElementById("musiccave-cancel-btn").addEventListener("click", () => {
+        document.getElementById("musiccave-cancel-btn").addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             globalCancelFlag = true;
             const btn = document.getElementById("musiccave-cancel-btn");
-            btn.innerText = "Aborting...";
+            btn.innerText = "Leaving the cave early...";
             btn.style.backgroundColor = "#555";
         });
     }
@@ -87,7 +89,8 @@ function renderScanProgressUI(songCount, playlistCount) {
             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                 <strong style="font-size: 16px;">MusicCave Scanner</strong>
             </div>
-            <div style="color: #1db954; font-weight: bold; margin-bottom: 10px; font-size: 14px;">Scrolling page...</div>
+            <!-- SPICED SCAN TEXT -->
+            <div style="color: #1db954; font-weight: bold; margin-bottom: 10px; font-size: 14px;">Cave crawling...</div>
             <div style="font-size: 13px; color: #aaa; margin-bottom: 5px;">Songs Found: <span id="musiccave-scan-songs" style="color:#fff; font-weight:bold; font-size: 16px;">0</span></div>
             <div style="font-size: 13px; color: #aaa; margin-bottom: 15px;">Playlists Found: <span id="musiccave-scan-playlists" style="color:#fff; font-weight:bold; font-size: 16px;">0</span></div>
             <button id="musiccave-scan-cancel-btn" style="width: 100%; background-color: #ff4d4d; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
@@ -96,10 +99,12 @@ function renderScanProgressUI(songCount, playlistCount) {
         `;
         document.body.appendChild(overlay);
 
-        document.getElementById("musiccave-scan-cancel-btn").addEventListener("click", () => {
+        document.getElementById("musiccave-scan-cancel-btn").addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             globalCancelFlag = true;
             const btn = document.getElementById("musiccave-scan-cancel-btn");
-            btn.innerText = "Wrapping up...";
+            btn.innerText = "Leaving the cave early...";
             btn.style.backgroundColor = "#555";
         });
     }
@@ -237,7 +242,7 @@ async function deepScrape() {
     const isSpotify = window.location.href.includes('spotify');
     console.log(`MusicCave: Starting Deep Scrape for ${isSpotify ? 'Spotify' : 'Apple'}...`);
     
- // --- 1. DETECT PLAYLIST NAME (FIXED SELECTORS) ---
+    // --- 1. DETECT PLAYLIST NAME ---
     let detectedName = "Unknown Playlist";
     try {
         if (isSpotify) {
@@ -249,9 +254,6 @@ async function deepScrape() {
         }
     } catch (e) { console.error("Robot: Name detection failed", e); }
     
-    // ==========================================
-    // NEW: STANDARDIZE LIKED/FAVORITE NAMES
-    // ==========================================
     const lowerName = detectedName.toLowerCase();
     if (isSpotify && (lowerName.includes("liked") || lowerName.includes("gelikete") || lowerName.includes("leuk"))) {
         detectedName = "LIKED_SPOTIFY";
@@ -261,123 +263,184 @@ async function deepScrape() {
     
     console.log("Robot: Detected Name ->", detectedName);
 
-    let allSongs = new Map();
-    let foundPlaylists = new Map();
-    let lastSongCount = 0; 
-    let lastPlaylistCount = 0;
-    let sameCountTicks = 0;
+    try {
+        // ==========================================
+        // NEW: PRE-SCAN SCROLL TO TOP
+        // ==========================================
+        console.log("Robot: Forcing lists to the absolute top before scanning...");
+        renderScanProgressUI("Climbing to the top of the page before scanning ▲", "▲");
 
-    for (let i = 0; i < 200; i++) {
-        // --- 2. SCRAPE VISIBLE DATA ---
-        if (globalCancelFlag) {
-            console.log("MusicCave: Scan cancelled early by user.");
-            break;
-        }
-        if (isSpotify) {
-            // Restored Spotify Track Scrape
-            document.querySelectorAll('[data-testid="tracklist-row"]').forEach(row => {
-                const isRecommended = row.closest('[data-testid="recommended-track"]') || row.closest('.playlistRecommenderContainer');
-                if (isRecommended) return; 
+        let lastFirstItemText = "";
+        let sameTopTicks = 0;
 
-                const titleEl = row.querySelector('a[data-testid="internal-track-link-name"], div[dir="auto"]');
-                const artistEls = row.querySelectorAll('a[href^="/artist/"]');
-                if (titleEl) {
-                    const title = titleEl.innerText.trim();
-                    const artist = Array.from(artistEls).map(a => a.innerText).join(', ');
-                    allSongs.set(`${title}-${artist}`.toLowerCase(), { title, artist });
-                }
-            });
-
-            // Restored Spotify Sidebar Playlists
-            document.querySelectorAll('[role="row"]').forEach(row => {
-                const text = row.innerText || "";
-                if (text.includes("Playlist") || text.includes("Liked") || text.includes("leuk vindt")) {
-                    const name = text.split('\n')[0].trim();
-                    if (row.getBoundingClientRect().left < 400 && name.length > 1) {
-                        foundPlaylists.set(name, { name, id: Math.random(), songs: "Spotify" });
-                    }
-                }
-            });
-        } else {
-            // Apple Scrape
-            document.querySelectorAll('main [role="row"], .songs-list-row').forEach(row => {
-                const titleEl = row.querySelector('[data-testid="track-title"], .songs-list-row__song-name');
-                const artistEl = row.querySelector('[data-testid="track-artist"], .songs-list-row__by-line');
-                if (titleEl) {
-                    const title = titleEl.innerText.trim();
-                    const artist = artistEl ? artistEl.innerText.trim() : "Unknown";
-                    allSongs.set(`${title}-${artist}`.toLowerCase(), { title, artist });
-                }
-            });
-            document.querySelectorAll('nav a[href*="/playlist/"]').forEach(link => {
-                const name = link.innerText.trim();
-                if (name.length > 1) foundPlaylists.set(name, { name, id: Math.random(), songs: "Apple" });
-            });
-        }
-
-        // RESTORED ORIGINAL LOGS
-        console.log(`Scrape Progress: ${allSongs.size} songs | ${foundPlaylists.size} playlists.`);
-
-        // NEW: Send live progress to background.js so the React app can see it
-        try {
-            chrome.runtime.sendMessage({
-                action: "UPDATE_SCAN_PROGRESS",
-                payload: { songs: allSongs.size, playlists: foundPlaylists.size }
-            });
-        } catch(e) {
-            console.log("Could not send progress", e);
-        }
-
-        renderScanProgressUI(allSongs.size, foundPlaylists.size);
-
-        // --- 3. SCROLL LOGIC ---
-        if (isSpotify) {
-            const songRows = document.querySelectorAll('[data-testid="tracklist-row"]');
-            if (songRows.length > 0) songRows[songRows.length - 1].scrollIntoView();
+        for (let t = 0; t < 50; t++) { 
+            if (globalCancelFlag) throw new Error("CANCELLED_BY_USER"); // Instantly aborts if cancelled
             
-            const allScrollables = Array.from(document.querySelectorAll('*')).filter(el => {
-                const s = window.getComputedStyle(el);
-                return (s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight;
-            });
-            const sidebar = allScrollables.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0];
-            if (sidebar) sidebar.scrollTop += 600;
-        } else {
-            const spinner = document.querySelector('[data-testid="infinite-scroll-spinner"]');
-            if (spinner) spinner.scrollIntoView();
-            else {
-                const appleRows = document.querySelectorAll('main [role="row"]');
-                if (appleRows.length > 0) appleRows[appleRows.length - 1].scrollIntoView();
+            let currentFirstText = "";
+
+            if (isSpotify) {
+                const songRows = document.querySelectorAll('[data-testid="tracklist-row"]');
+                if (songRows.length > 0) {
+                    songRows[0].scrollIntoView({ block: 'start' });
+                    currentFirstText = songRows[0].innerText;
+                }
+                
+                const allScrollables = Array.from(document.querySelectorAll('*')).filter(el => {
+                    const s = window.getComputedStyle(el);
+                    return (s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight;
+                });
+                const sidebar = allScrollables.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0];
+                if (sidebar) sidebar.scrollTop = 0;
+
+            } else {
+                window.scrollTo(0, 0);
+                const appleRows = document.querySelectorAll('main [role="row"], .songs-list-row');
+                if (appleRows.length > 0) {
+                    appleRows[0].scrollIntoView({ block: 'start' });
+                    currentFirstText = appleRows[0].innerText;
+                }
             }
+
+            if (currentFirstText === lastFirstItemText && currentFirstText !== "") {
+                sameTopTicks++;
+            } else {
+                sameTopTicks = 0;
+            }
+
+            if (sameTopTicks >= 3) {
+                console.log("Robot: Reached the absolute top! Ready to scan downwards.");
+                break;
+            }
+
+            lastFirstItemText = currentFirstText;
+            await sleep(isSpotify ? 600 : 1000); 
         }
 
-        await sleep(isSpotify ? 800 : 1500);
+        document.getElementById("musiccave-scan-songs").innerText = "0";
+        document.getElementById("musiccave-scan-playlists").innerText = "0";
 
-        // --- 4. EXIT STRATEGY ---
-        const hasSongsStopped = allSongs.size === lastSongCount;
-        const hasPlaylistsStopped = foundPlaylists.size === lastPlaylistCount;
+        // ==========================================
+        // 2. ORIGINAL DOWNWARD SCRAPE & SCROLL
+        // ==========================================
+        let allSongs = new Map();
+        let foundPlaylists = new Map();
+        let lastSongCount = 0; 
+        let lastPlaylistCount = 0;
+        let sameCountTicks = 0;
 
-        if (hasSongsStopped && hasPlaylistsStopped) {
-            sameCountTicks++;
-        } else {
-            sameCountTicks = 0;
+        for (let i = 0; i < 200; i++) {
+            if (globalCancelFlag) throw new Error("CANCELLED_BY_USER"); // Instantly aborts if cancelled
+            
+            if (isSpotify) {
+                document.querySelectorAll('[data-testid="tracklist-row"]').forEach(row => {
+                    const isRecommended = row.closest('[data-testid="recommended-track"]') || row.closest('.playlistRecommenderContainer');
+                    if (isRecommended) return; 
+
+                    const titleEl = row.querySelector('a[data-testid="internal-track-link-name"], div[dir="auto"]');
+                    const artistEls = row.querySelectorAll('a[href^="/artist/"]');
+                    if (titleEl) {
+                        const title = titleEl.innerText.trim();
+                        const artist = Array.from(artistEls).map(a => a.innerText).join(', ');
+                        allSongs.set(`${title}-${artist}`.toLowerCase(), { title, artist });
+                    }
+                });
+
+                document.querySelectorAll('[role="row"]').forEach(row => {
+                    const text = row.innerText || "";
+                    if (text.includes("Playlist") || text.includes("Liked") || text.includes("leuk vindt")) {
+                        const name = text.split('\n')[0].trim();
+                        if (row.getBoundingClientRect().left < 400 && name.length > 1) {
+                            foundPlaylists.set(name, { name, id: Math.random(), songs: "Spotify" });
+                        }
+                    }
+                });
+            } else {
+                document.querySelectorAll('main [role="row"], .songs-list-row').forEach(row => {
+                    const titleEl = row.querySelector('[data-testid="track-title"], .songs-list-row__song-name');
+                    const artistEl = row.querySelector('[data-testid="track-artist"], .songs-list-row__by-line');
+                    if (titleEl) {
+                        const title = titleEl.innerText.trim();
+                        const artist = artistEl ? artistEl.innerText.trim() : "Unknown";
+                        allSongs.set(`${title}-${artist}`.toLowerCase(), { title, artist });
+                    }
+                });
+                document.querySelectorAll('nav a[href*="/playlist/"]').forEach(link => {
+                    const name = link.innerText.trim();
+                    if (name.length > 1) foundPlaylists.set(name, { name, id: Math.random(), songs: "Apple" });
+                });
+            }
+
+            console.log(`Scrape Progress: ${allSongs.size} songs | ${foundPlaylists.size} playlists.`);
+
+            try {
+                chrome.runtime.sendMessage({
+                    action: "UPDATE_SCAN_PROGRESS",
+                    payload: { songs: allSongs.size, playlists: foundPlaylists.size }
+                });
+            } catch(e) {
+                console.log("Could not send progress", e);
+            }
+
+            renderScanProgressUI(allSongs.size, foundPlaylists.size);
+
+            // --- 3. SCROLL LOGIC ---
+            if (isSpotify) {
+                const songRows = document.querySelectorAll('[data-testid="tracklist-row"]');
+                if (songRows.length > 0) songRows[songRows.length - 1].scrollIntoView();
+                
+                const allScrollables = Array.from(document.querySelectorAll('*')).filter(el => {
+                    const s = window.getComputedStyle(el);
+                    return (s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight;
+                });
+                const sidebar = allScrollables.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0];
+                if (sidebar) sidebar.scrollTop += 600;
+            } else {
+                const spinner = document.querySelector('[data-testid="infinite-scroll-spinner"]');
+                if (spinner) spinner.scrollIntoView();
+                else {
+                    const appleRows = document.querySelectorAll('main [role="row"]');
+                    if (appleRows.length > 0) appleRows[appleRows.length - 1].scrollIntoView();
+                }
+            }
+
+            await sleep(isSpotify ? 800 : 1500);
+
+            // --- 4. EXIT STRATEGY ---
+            const hasSongsStopped = allSongs.size === lastSongCount;
+            const hasPlaylistsStopped = foundPlaylists.size === lastPlaylistCount;
+
+            if (hasSongsStopped && hasPlaylistsStopped) {
+                sameCountTicks++;
+            } else {
+                sameCountTicks = 0;
+            }
+
+            if (sameCountTicks >= 3) {
+                console.log("MusicCave: Reached the end of list.");
+                break;
+            }
+
+            lastSongCount = allSongs.size;
+            lastPlaylistCount = foundPlaylists.size;
         }
 
-        if (sameCountTicks >= 3) {
-            console.log("MusicCave: Reached the end of list.");
-            break;
-        }
+        return { 
+            songs: Array.from(allSongs.values()), 
+            playlists: Array.from(foundPlaylists.values()),
+            detectedPlaylistName: detectedName 
+        };
 
-        lastSongCount = allSongs.size;
-        lastPlaylistCount = foundPlaylists.size;
+    } catch (err) {
+        // --- THIS GRACEFULLY CATCHES THE CANCEL BUTTON AND FREES THE DASHBOARD ---
+        if (err.message === "CANCELLED_BY_USER") {
+            console.log("Robot: Scan aborted by user.");
+            return { songs: [], playlists: [], detectedPlaylistName: "Scan Cancelled" };
+        }
+        console.error("Scrape Error:", err);
+        return { songs: [], playlists: [], detectedPlaylistName: "Error" };
+    } finally {
+        removeScanProgressUI();
     }
-
-    removeScanProgressUI();
-
-    return { 
-        songs: Array.from(allSongs.values()), 
-        playlists: Array.from(foundPlaylists.values()),
-        detectedPlaylistName: detectedName 
-    };
 }
 
 // ==========================================
@@ -974,6 +1037,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "REMOVE_UI") {
         removeProgressUI();
         removeScanProgressUI();
+        sendResponse({ status: "Success" });
+        return true;
+    }
+    if (request.action === "ABORT_CURRENT_ACTION") {
+        globalCancelFlag = true;
         sendResponse({ status: "Success" });
         return true;
     }
