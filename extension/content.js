@@ -570,17 +570,22 @@ async function executeAppleInjection(song, targetName, sendResponse) {
         }
         if (!searchInput) throw new Error("Search bar not found");
 
-        // Use the specialized typing and search trigger from backup
         await typeIntoAppleInput(searchInput, searchQuery);
         await triggerAppleSearch(searchInput);
         
         await sleep(4000); 
 
-        const rows = document.querySelectorAll('main [role="row"], main .songs-list-row, main .grid-item');
-        const visibleRows = Array.from(rows).filter(row => row.getBoundingClientRect().width > 0);
+        const rows = document.querySelectorAll('main [role="row"], main .songs-list-row');
+        const visibleRows = Array.from(rows).filter(row => {
+            if (row.getBoundingClientRect().width === 0) return false;
+            // Ensure this row actually has a track-level "More" button!
+            const hasMoreBtn = row.querySelector('.contextual-menu__trigger, [data-testid="more-button"], button[aria-label*="meer"], button[aria-label*="more"]');
+            return !!hasMoreBtn; 
+        });
+
         let songRow = findBestSongMatch(visibleRows, song);
 
-        if (!songRow) throw new Error(`Accurate song match not found.`);
+        if (!songRow) throw new Error(`Accurate song match not found (Skipped Karaoke/Covers).`);
         console.log(`Robot: Song row found for ${song.title}`);
 
         songRow.scrollIntoView({ block: 'center' });
@@ -643,7 +648,6 @@ async function executeAppleInjection(song, targetName, sendResponse) {
         sendResponse({ status: "Success" });
     }  catch (err) {
         console.error("Injection Error:", err);
-        // Catch the custom cancel error
         if (err.message === "CANCELLED_BY_USER") {
             sendResponse({ status: "Cancelled", message: "User cancelled from popup" });
         } else {
@@ -653,21 +657,13 @@ async function executeAppleInjection(song, targetName, sendResponse) {
 }
 
 // ==========================================
-// 5. SPOTIFY INJECTION (STAYING AS IS - WORKS!)
+// 5. SPOTIFY INJECTION
 // ==========================================
 
 async function executeSpotifyInjection(song, targetName, sendResponse) {
     try {
         const finalTargetName = (typeof targetName === 'string') ? targetName : "Cave";
         const searchQuery = getCleanSearchQuery(song);
-
-          const baseCleanTitle = song.title
-            .split(' - ')[0] 
-            .split(' (')[0]  
-            .split(' [')[0]  
-            .replace(/remaster(ed)?/gi, '')
-            .trim()
-            .toLowerCase();
 
         console.log(`Robot: Starting Spotify injection for ${searchQuery}`);
         document.body.click(); 
@@ -686,48 +682,43 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
         sendKey(searchInput, 'Enter');
         await sleep(3000); 
 
-        // ==========================================
-        // NEW STEP: CLICK THE "SONGS" / "NUMMERS" CHIP
-        // ==========================================
         console.log("Robot: Looking for 'Songs'/'Nummers' filter chip...");
         let filterClicked = false;
         
         for (let i = 0; i < 10; i++) {
-            // Grab spans that look like chips, or just buttons in the top section
             const possibleChips = document.querySelectorAll('button span[class*="chip"], button');
             const targetChip = Array.from(possibleChips).find(el => {
                 const txt = el.innerText?.trim().toLowerCase() || "";
-                // Support Dutch, English, etc.
                 return txt === "nummers" || txt === "songs" || txt === "tracks";
             });
 
             if (targetChip) {
                 console.log(`Robot: Found filter chip: "${targetChip.innerText}". Clicking it...`);
-                // If the target is a span, click its parent button just to be safe
                 const clickable = targetChip.closest('button') || targetChip;
                 highlightElement(clickable, "#1db954");
                 clickable.click();
                 filterClicked = true;
                 break;
             }
-            await sleep(400); // Wait and retry if it hasn't rendered yet
+            await sleep(400);
         }
 
         if (filterClicked) {
-            await sleep(2000); // Wait for the tracklist to filter and re-render
+            await sleep(2000); 
         } else {
             console.log("Robot: Warning - Could not find Songs filter chip. Attempting to continue anyway...");
         }
-        // ==========================================
 
         console.log("Robot: Searching for tracklist row...");
         let targetRow = null;
         for (let i = 0; i < 15; i++) {
-            const rows = document.querySelectorAll('main [data-testid="tracklist-row"], [role="row"]');
-            
+            const rows = document.querySelectorAll('main [data-testid="tracklist-row"]');
             const visibleRows = Array.from(rows).filter(row => {
                 const rect = row.getBoundingClientRect();
-                return rect.left > 250 && rect.width > 0;
+                if (rect.left < 250 || rect.width === 0) return false;
+                // Ensure this row actually has a track-level "More" menu!
+                const hasMoreBtn = row.querySelector('button[data-testid="more-button"], [aria-haspopup="menu"]');
+                return !!hasMoreBtn;
             });
 
             if (visibleRows.length > 0) {
@@ -745,7 +736,7 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
 
         const moreBtn = targetRow.querySelector('button[data-testid="more-button"], [aria-haspopup="menu"]');
         if (moreBtn) moreBtn.click();
-     else {
+        else {
             console.log("Robot: No more-button, attempting context menu click...");
             targetRow.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2 }));
         }        
@@ -788,7 +779,6 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
             sendKey(playlistSearch, 'ArrowDown');
             await sleep(800);
             await commitSelection();
-            sendResponse({ status: "Success" });
         } else {
             console.log("Robot: No search box in flyout, searching by element text...");
             const allItems = document.querySelectorAll('[role="menuitem"], span, button');
@@ -798,24 +788,20 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
             });
             if (targetPlaylistBtn) {
                 await commitSelection(targetPlaylistBtn);
-                sendResponse({ status: "Success" });
             } else {
                 throw new Error("Flyout interaction failed.");
             }
         }
-         console.log("Robot: Checking for 'Already Added' popup...");
-        await sleep(1200); // Give Spotify a moment to render the modal
+        
+        console.log("Robot: Checking for 'Already Added' popup...");
+        await sleep(1200); 
 
         const duplicateText = document.querySelector('[data-testid="confirm-dialog-description"]');
         if (duplicateText) {
             console.log("Robot: Duplicate Popup detected!");
-            
-            // 1. Go up the HTML tree to isolate the Modal Box itself.
-            // This prevents the robot from accidentally finding Play/Pause buttons on the main screen.
             const modalContainer = duplicateText.parentElement.parentElement; 
             
             if (modalContainer) {
-                // 2. ONLY look for buttons inside this specific modal box
                 const modalButtons = modalContainer.querySelectorAll('button');
                 
                 let skipBtn = Array.from(modalButtons).find(b => {
@@ -823,7 +809,6 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
                     return txt.includes("niet") || txt.includes("don't") || txt.includes("skip") || txt.includes("cancel");
                 });
 
-                // Fallback just in case text doesn't match
                 if (!skipBtn) {
                     skipBtn = modalContainer.querySelector('[data-encore-id="buttonPrimary"]');
                 }
@@ -833,21 +818,15 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
                     skipBtn.focus();
                     highlightElement(skipBtn, "#ff4d4d");
                     await sleep(300);
-                    
-                    // Fire both native click and React Enter key just to guarantee it triggers
                     skipBtn.click();
                     sendKey(skipBtn, 'Enter');
-                    
-                    await sleep(1000); // Wait for modal to disappear
+                    await sleep(1000); 
                 }
             }
         }
-
-        // Send success after the modal check is done
         sendResponse({ status: "Success" });
     } catch (err) {
         console.error("Injection Error:", err);
-        // Catch the custom cancel error
         if (err.message === "CANCELLED_BY_USER") {
             sendResponse({ status: "Cancelled", message: "User cancelled from popup" });
         } else {
@@ -859,16 +838,11 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
 // ==========================================
 // NEW: APPLE LIBRARY INJECTION
 // ==========================================
-
-// ==========================================
-// NEW: APPLE FAVORITES INJECTION (Keyboard Navigation Mode)
-// ==========================================
 async function executeAppleLibraryInjection(song, sendResponse) {
     try {
         const searchQuery = getCleanSearchQuery(song);
         console.log(`Robot: Starting Apple Favorites injection for: ${song.title}`);
 
-        // 1. Search Logic
         let searchInput = document.querySelector('input[type="search"]');
         if (!searchInput) {
             const searchLink = document.querySelector('a[href*="/search"]');
@@ -882,15 +856,18 @@ async function executeAppleLibraryInjection(song, sendResponse) {
         await triggerAppleSearch(searchInput);
         await sleep(4000); 
 
-        // 2. Find Song Row
-        const rows = document.querySelectorAll('main [role="row"], main .songs-list-row, main .grid-item');
-        const visibleRows = Array.from(rows).filter(row => row.getBoundingClientRect().width > 0);
+        const rows = document.querySelectorAll('main [role="row"], main .songs-list-row');
+        const visibleRows = Array.from(rows).filter(row => {
+            if (row.getBoundingClientRect().width === 0) return false;
+            const hasMoreBtn = row.querySelector('.contextual-menu__trigger, [data-testid="more-button"], button[aria-label*="meer"], button[aria-label*="more"]');
+            return !!hasMoreBtn; 
+        });
+        
         let songRow = findBestSongMatch(visibleRows, song);
 
         if (!songRow) throw new Error(`Accurate song match not found (Skipped Karaoke/Covers).`);
         songRow.scrollIntoView({ block: 'center' });
         
-        // 3. Open More Menu
         const rowButtons = Array.from(songRow.querySelectorAll('button'));
         let targetMoreBtn = null;
         for (let btn of rowButtons) {
@@ -906,31 +883,25 @@ async function executeAppleLibraryInjection(song, sendResponse) {
             }
         }
         if (!targetMoreBtn) throw new Error("More button not found.");
-        await sleep(1500); // Crucial wait for the context menu to render in the DOM
+        await sleep(1500); 
 
-        // 4. Keyboard Navigation (Tabbing down like a human)
         console.log("Robot: Tabbing down to find Favorite...");
         let foundBtn = false;
         let isAlreadyAdded = false;
 
         for (let i = 0; i < 20; i++) {
-            // Get the currently highlighted item
             const focused = document.activeElement;
             const txt = (focused.innerText + " " + (focused.getAttribute('title') || "") + " " + (focused.getAttribute('aria-label') || "")).toLowerCase();
             
             console.log(`Robot: Currently focused on: "${txt}"`);
 
-            // Match Favorite/Favoriet
             if (txt.includes('favorite') || txt.includes('favoriet')) {
-                
-                // If the button says "Undo" or "Ongedaan", it's already favorited!
                 if (txt.includes('undo') || txt.includes('ongedaan') || txt.includes('unfavorite')) {
                     isAlreadyAdded = true;
                 }
 
                 if (isAlreadyAdded) {
                     console.log("Robot: Song is already in Apple Favorites. Skipping and marking as success!");
-                    // Sending "Success" makes the dashboard save it to the DB so we don't scan it again later
                     sendResponse({ status: "Success" });
                     return;
                 }
@@ -938,20 +909,15 @@ async function executeAppleLibraryInjection(song, sendResponse) {
                 console.log("Robot: Favorite Match found! Committing...");
                 highlightElement(focused, "#1db954");
                 await sleep(400);
-                
-                // Hit Enter on the focused element
                 await commitSelection(focused);
                 foundBtn = true;
                 break;
             }
-
-            // Move down to the next item in the menu
             sendKey(focused, 'ArrowDown');
             await sleep(400);
         }
 
         if (!foundBtn) throw new Error("'Favorite' option not found in menu.");
-
         console.log("Robot: Successfully added to Apple Favorites.");
         sendResponse({ status: "Success" });
 
@@ -970,13 +936,11 @@ async function executeAppleLibraryInjection(song, sendResponse) {
 async function executeSpotifyLikedInjection(song, sendResponse) {
     try {
         const searchQuery = getCleanSearchQuery(song);
-        const baseCleanTitle = song.title.split(' - ')[0].split(' (')[0].split(' [')[0].replace(/remaster(ed)?/gi, '').trim().toLowerCase();
 
         console.log(`Robot: Starting Spotify Liked Songs injection for ${searchQuery}`);
         document.body.click(); 
         await sleep(1000);
 
-        // 1. Search Logic
         let searchInput = document.querySelector('input[data-testid="search-input"]');
         if (!searchInput) {
             const searchLink = document.querySelector('a[href="/search"], a[href="/zoeken"]');
@@ -990,7 +954,6 @@ async function executeSpotifyLikedInjection(song, sendResponse) {
         sendKey(searchInput, 'Enter');
         await sleep(3000); 
 
-        // 2. Click Songs Filter
         let filterClicked = false;
         for (let i = 0; i < 10; i++) {
             const possibleChips = document.querySelectorAll('button span[class*="chip"], button');
@@ -1010,10 +973,12 @@ async function executeSpotifyLikedInjection(song, sendResponse) {
 
         let targetRow = null;
         for (let i = 0; i < 15; i++) {
-            const rows = document.querySelectorAll('main [data-testid="tracklist-row"], [role="row"]');
+            const rows = document.querySelectorAll('main [data-testid="tracklist-row"]');
             const visibleRows = Array.from(rows).filter(row => {
                 const rect = row.getBoundingClientRect();
-                return rect.left > 250 && rect.width > 0;
+                if (rect.left < 250 || rect.width === 0) return false;
+                const hasMoreBtn = row.querySelector('button[data-testid="more-button"], [aria-haspopup="menu"]');
+                return !!hasMoreBtn;
             });
             
             if (visibleRows.length > 0) {
@@ -1027,13 +992,11 @@ async function executeSpotifyLikedInjection(song, sendResponse) {
         targetRow.scrollIntoView({ block: 'center' });
         await sleep(600);
 
-        // 4. Open Context Menu
         const moreBtn = targetRow.querySelector('button[data-testid="more-button"], [aria-haspopup="menu"]');
         if (moreBtn) moreBtn.click();
         else targetRow.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2 }));
         await sleep(1500); 
 
-        // 5. Look for Liked Songs / Nummers leuk
         console.log("Robot: Looking for Liked Songs button...");
         let addBtn = null;
         let isAlreadyAdded = false;
@@ -1043,10 +1006,7 @@ async function executeSpotifyLikedInjection(song, sendResponse) {
             for (let el of items) {
                 const t = el.innerText.toLowerCase();
                 
-                // Match Liked/Gelikete/Leuk
                 if (t.includes('liked') || t.includes('gelikete') || (t.includes('nummers') && t.includes('leuk'))) {
-                    
-                    // If the button says "Remove" or "Verwijder", it's already added!
                     if (t.includes('remove') || t.includes('verwijder') || t.includes('delete')) {
                         isAlreadyAdded = true;
                     }
@@ -1058,7 +1018,7 @@ async function executeSpotifyLikedInjection(song, sendResponse) {
             await sleep(400);
         }
 
-     if (isAlreadyAdded) {
+        if (isAlreadyAdded) {
             console.log("Robot: Song is already in Spotify Liked Songs. Skipping and marking as success!");
             sendResponse({ status: "Success" });
             return;
@@ -1066,7 +1026,6 @@ async function executeSpotifyLikedInjection(song, sendResponse) {
 
         if (!addBtn) throw new Error("'Save to Liked Songs' not found.");
 
-        // FIX: The menu item is an <li>, but Spotify requires the <button> inside it to be clicked
         let targetButton = addBtn;
         if (addBtn.tagName !== 'BUTTON') {
             const btnInside = addBtn.querySelector('button');
@@ -1077,7 +1036,6 @@ async function executeSpotifyLikedInjection(song, sendResponse) {
         highlightElement(targetButton, "#1db954");
         await sleep(800);
         
-        // Force native click AND commit selection on the exact button element
         targetButton.click();
         await commitSelection(targetButton);
         

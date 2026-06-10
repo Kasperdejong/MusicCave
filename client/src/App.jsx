@@ -11,11 +11,15 @@ const EXTENSION_ID = "clammlphhicbgjpmjbgiedegkepkabcp";
 
 const stringSimilarity = (str1, str2) => {
     if (!str1 || !str2) return 0;
-    // FIX: \p{L} keeps all international characters (Chinese, Japanese, accents, etc)
     str1 = str1.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
     str2 = str2.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    
     if (str1 === str2) return 1;
-    if (str1.length < 2 || str2.length < 2) return 0;
+
+    // FIX: If it's a super short string (like Chinese characters), do a direct includes check
+    if (str1.length <= 2 || str2.length <= 2) {
+        return (str1.includes(str2) || str2.includes(str1)) ? 0.9 : 0;
+    }
 
     let bigrams1 = new Map();
     for (let i = 0; i < str1.length - 1; i++) {
@@ -442,28 +446,24 @@ const handleCancelTransfer = () => {
 
   // --- FUZZY DUPLICATE CHECKER ---
  const isDuplicateSong = (source, target) => {
-    const sTitle = source.title.toLowerCase();
-    const tTitle = target.title.toLowerCase();
-    const sArtist = source.artist.toLowerCase();
-    const tArtist = target.artist.toLowerCase();
+    // 1. Clean the junk off first!
+    const cleanTitle = (t) => t.toLowerCase().split('(')[0].split('[')[0].split('-')[0].split('–')[0].replace(/remaster(ed)?/gi, '').trim();
+    const cleanArtist = (a) => a.toLowerCase().split(',')[0].split('&')[0].split(/feat\.?/i)[0].split(/ft\.?/i)[0].trim();
 
-    // 1. Exact Match
+    const sTitle = cleanTitle(source.title);
+    const tTitle = cleanTitle(target.title);
+    const sArtist = cleanArtist(source.artist);
+    const tArtist = cleanArtist(target.artist);
+
+    // 2. Exact match on cleaned strings
     if (sTitle === tTitle && sArtist === tArtist) return true;
 
-    // 2. Fuzzy Match (If Title is 85% similar and Artist is 75% similar)
+    // 3. Fuzzy Match
     const titleScore = stringSimilarity(sTitle, tTitle);
     const artistScore = stringSimilarity(sArtist, tArtist);
     
-    if (titleScore > 0.85 && artistScore > 0.75) return true;
-
-    // 3. Fallback to your original clean logic
-    const cleanTitle = (t) => t.split('(')[0].split('[')[0].split('-')[0].split('–')[0].trim();
-    const cleanArtist = (a) => a.split(',')[0].split('&')[0].split(/feat\.?/i)[0].split(/ft\.?/i)[0].trim();
-
-    if (cleanTitle(sTitle) === cleanTitle(tTitle)) {
-        if (cleanArtist(sArtist) === cleanArtist(tArtist)) return true;
-        if (cleanArtist(sArtist).includes(cleanArtist(tArtist)) || cleanArtist(tArtist).includes(cleanArtist(sArtist))) return true;
-    }
+    // Lowered threshold to 0.75 for titles so it catches close Chinese/Korean matches
+    if (titleScore > 0.75 && artistScore > 0.75) return true;
 
     return false;
 };
