@@ -151,14 +151,16 @@ function getCleanSearchQuery(song) {
 // FUZZY MATCHING & SCORING ALGORITHM
 // ==========================================
 
-// 1. Calculates how similar two strings are (0.0 to 1.0)
 function stringSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
-    // FIX: \p{L} keeps all international characters
     str1 = str1.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
     str2 = str2.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
     if (str1 === str2) return 1;
-    if (str1.length < 2 || str2.length < 2) return 0;
+    
+    // FIX: Safely handle short 1-2 character Chinese titles
+    if (str1.length <= 2 || str2.length <= 2) {
+        return (str1.includes(str2) || str2.includes(str1)) ? 0.9 : 0;
+    }
 
     let bigrams1 = new Map();
     for (let i = 0; i < str1.length - 1; i++) {
@@ -178,65 +180,57 @@ function stringSimilarity(str1, str2) {
     return (2.0 * intersectionSize) / (str1.length - 1 + str2.length - 1);
 }
 
-// 2. Grades all DOM rows and picks the most accurate one
-// 2. Grades all DOM rows and picks the most accurate one
 function findBestSongMatch(rows, targetSong) {
     let bestMatch = null;
     let highestScore = 0;
     
     const cleanTargetTitle = targetSong.title.toLowerCase();
     const cleanTargetArtist = targetSong.artist.toLowerCase();
-    
-    // Keep international characters for math
     const targetString = `${cleanTargetTitle} ${cleanTargetArtist}`.replace(/[^\p{L}\p{N} ]/gu, '');
     
-    // Base parts for exact match bonuses
     const baseTitle = cleanTargetTitle.split(' - ')[0].split(' (')[0].split(' [')[0].trim();
     const baseArtist = cleanTargetArtist.split(',')[0].split('&')[0].trim();
 
-    // 1. Hard-banned words (Covers/Karaoke) that apply to the WHOLE row text
     const badModifiers = ['cover', 'karaoke', 'tribute', 'instrumental', 'sped up', 'slowed'];
     const originalHasModifier = badModifiers.filter(w => cleanTargetTitle.includes(w));
 
     for (const row of rows) {
         const rowText = row.innerText.toLowerCase().replace(/\n/g, ' ');
         
-        // Try to isolate JUST the title element so we don't accidentally penalize Album names
+        // ==========================================
+        // ARTIST/ALBUM KILLER 
+        // If the row text doesn't contain the base title, it's an artist/album page. Skip it instantly!
+        // ==========================================
+        const safeRowText = rowText.replace(/[^\p{L}\p{N} ]/gu, '');
+        const safeBaseTitle = baseTitle.replace(/[^\p{L}\p{N} ]/gu, '');
+        
+        if (safeBaseTitle.length > 0 && !safeRowText.includes(safeBaseTitle)) {
+            continue; 
+        }
+
         let rowTitle = "";
         const titleEl = row.querySelector('div[dir="auto"], [data-testid="track-title"], .songs-list-row__song-name, a[data-testid="internal-track-link-name"]');
         if (titleEl) {
             rowTitle = titleEl.innerText.toLowerCase();
         } else {
-            rowTitle = row.innerText.split('\n')[0].toLowerCase(); // Fallback
+            rowTitle = row.innerText.split('\n')[0].toLowerCase();
         }
 
-        // Base Similarity Score
         let score = stringSimilarity(targetString, rowText);
 
-        // Exact Match Bonuses
         if (rowText.includes(baseTitle)) score += 0.3;
         if (rowText.includes(baseArtist)) score += 0.3;
 
-        // ==========================================
-        // 2. DYNAMIC JUNK PENALTY
-        // Fixes "Alternate Mix", "Radio Edit", "Live Version" etc.
-        // ==========================================
-        
-        // This Regex matches anything inside ( ), [ ], or after a " - "
         const junkMatches = rowTitle.match(/\([^)]+\)|\[[^\]]+\]|\s-\s.+/g);
         if (junkMatches) {
             for (let match of junkMatches) {
-                // Strip the symbols away, leaving just the words (e.g. "Alternate Mix")
                 let junkText = match.replace(/[()\[\]]/g, '').replace(/^\s*-\s*/, '').trim();
-                
-                // If the ORIGINAL title DOES NOT contain these words, it's an unwanted version!
                 if (junkText.length > 2 && !cleanTargetTitle.includes(junkText)) {
-                    score -= 0.5; // Heavy penalty for having extra version tags
+                    score -= 0.5; 
                 }
             }
         }
 
-        // 3. Penalty for absolute wrong versions (karaoke/covers)
         for (const word of badModifiers) {
             if (rowText.includes(word) && !originalHasModifier.includes(word)) {
                 score -= 0.6; 
@@ -250,7 +244,6 @@ function findBestSongMatch(rows, targetSong) {
     }
 
     console.log(`Robot: Best match score for "${targetSong.title}" is ${highestScore.toFixed(2)}`);
-    
     return highestScore > 0.25 ? bestMatch : null; 
 }
 
@@ -575,13 +568,8 @@ async function executeAppleInjection(song, targetName, sendResponse) {
         
         await sleep(4000); 
 
-        const rows = document.querySelectorAll('main [role="row"], main .songs-list-row');
-        const visibleRows = Array.from(rows).filter(row => {
-            if (row.getBoundingClientRect().width === 0) return false;
-            // Ensure this row actually has a track-level "More" button!
-            const hasMoreBtn = row.querySelector('.contextual-menu__trigger, [data-testid="more-button"], button[aria-label*="meer"], button[aria-label*="more"]');
-            return !!hasMoreBtn; 
-        });
+        const rows = document.querySelectorAll('main [role="row"], main .songs-list-row, main .grid-item');
+        const visibleRows = Array.from(rows).filter(row => row.getBoundingClientRect().width > 0);
 
         let songRow = findBestSongMatch(visibleRows, song);
 
@@ -712,13 +700,10 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
         console.log("Robot: Searching for tracklist row...");
         let targetRow = null;
         for (let i = 0; i < 15; i++) {
-            const rows = document.querySelectorAll('main [data-testid="tracklist-row"]');
+         const rows = document.querySelectorAll('main [data-testid="tracklist-row"]');
             const visibleRows = Array.from(rows).filter(row => {
                 const rect = row.getBoundingClientRect();
-                if (rect.left < 250 || rect.width === 0) return false;
-                // Ensure this row actually has a track-level "More" menu!
-                const hasMoreBtn = row.querySelector('button[data-testid="more-button"], [aria-haspopup="menu"]');
-                return !!hasMoreBtn;
+                return rect.left > 250 && rect.width > 0;
             });
 
             if (visibleRows.length > 0) {
@@ -856,12 +841,8 @@ async function executeAppleLibraryInjection(song, sendResponse) {
         await triggerAppleSearch(searchInput);
         await sleep(4000); 
 
-        const rows = document.querySelectorAll('main [role="row"], main .songs-list-row');
-        const visibleRows = Array.from(rows).filter(row => {
-            if (row.getBoundingClientRect().width === 0) return false;
-            const hasMoreBtn = row.querySelector('.contextual-menu__trigger, [data-testid="more-button"], button[aria-label*="meer"], button[aria-label*="more"]');
-            return !!hasMoreBtn; 
-        });
+        const rows = document.querySelectorAll('main [role="row"], main .songs-list-row, main .grid-item');
+        const visibleRows = Array.from(rows).filter(row => row.getBoundingClientRect().width > 0);
         
         let songRow = findBestSongMatch(visibleRows, song);
 
@@ -973,12 +954,10 @@ async function executeSpotifyLikedInjection(song, sendResponse) {
 
         let targetRow = null;
         for (let i = 0; i < 15; i++) {
-            const rows = document.querySelectorAll('main [data-testid="tracklist-row"]');
+           const rows = document.querySelectorAll('main [data-testid="tracklist-row"]');
             const visibleRows = Array.from(rows).filter(row => {
                 const rect = row.getBoundingClientRect();
-                if (rect.left < 250 || rect.width === 0) return false;
-                const hasMoreBtn = row.querySelector('button[data-testid="more-button"], [aria-haspopup="menu"]');
-                return !!hasMoreBtn;
+                return rect.left > 250 && rect.width > 0;
             });
             
             if (visibleRows.length > 0) {

@@ -446,7 +446,6 @@ const handleCancelTransfer = () => {
 
   // --- FUZZY DUPLICATE CHECKER ---
  const isDuplicateSong = (source, target) => {
-    // 1. Clean the junk off first!
     const cleanTitle = (t) => t.toLowerCase().split('(')[0].split('[')[0].split('-')[0].split('–')[0].replace(/remaster(ed)?/gi, '').trim();
     const cleanArtist = (a) => a.toLowerCase().split(',')[0].split('&')[0].split(/feat\.?/i)[0].split(/ft\.?/i)[0].trim();
 
@@ -455,14 +454,21 @@ const handleCancelTransfer = () => {
     const sArtist = cleanArtist(source.artist);
     const tArtist = cleanArtist(target.artist);
 
-    // 2. Exact match on cleaned strings
+    // 1. Exact match on cleaned strings
     if (sTitle === tTitle && sArtist === tArtist) return true;
+
+    // 2. CROSS-LANGUAGE BYPASS (Fixes Apple/Spotify Artist Translation issues)
+    if (sTitle === tTitle) {
+        // If the title contains Chinese, Japanese, or Korean characters, trust the exact title match!
+        if (/[\u3400-\u9FBF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF]/.test(sTitle)) {
+            return true;
+        }
+    }
 
     // 3. Fuzzy Match
     const titleScore = stringSimilarity(sTitle, tTitle);
     const artistScore = stringSimilarity(sArtist, tArtist);
     
-    // Lowered threshold to 0.75 for titles so it catches close Chinese/Korean matches
     if (titleScore > 0.75 && artistScore > 0.75) return true;
 
     return false;
