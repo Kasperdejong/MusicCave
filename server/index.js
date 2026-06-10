@@ -53,22 +53,36 @@ app.get('/api/stats', authenticateUser, async (req, res) => {
 // GET SCANNED PLAYLISTS (For the Hover Tooltips)
 app.get('/api/scanned-playlists', authenticateUser, async (req, res) => {
     try {
-        // Increased limit to 1,000,000 to handle absolutely massive music libraries
-        const { data, error } = await supabase
-            .from('user_songs')
-            .select('platform, playlist_name')
-            .eq('user_id', req.user.id)
-            .limit(1000000); 
-        
-        if (error) throw error;
-
-        // Group them into unique sets so we don't send duplicate names
         const scanned = { apple: new Set(), spotify: new Set() };
-        data.forEach(row => {
-            if (row.platform && row.playlist_name) {
-                scanned[row.platform].add(row.playlist_name.toLowerCase());
+        
+        // We bypass the 1,000 row hard-limit by fetching in chunks (Pagination)
+        let from = 0;
+        let to = 999;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabase
+                .from('user_songs')
+                .select('platform, playlist_name')
+                .eq('user_id', req.user.id)
+                .range(from, to);
+            
+            if (error) throw error;
+
+            // If we got data back, process it and step forward 1000 rows
+            if (data && data.length > 0) {
+                data.forEach(row => {
+                    if (row.platform && row.playlist_name) {
+                        scanned[row.platform].add(row.playlist_name.toLowerCase());
+                    }
+                });
+                from += 1000;
+                to += 1000;
+            } else {
+                // If the data array is empty, we've reached the end of the database!
+                hasMore = false;
             }
-        });
+        }
 
         // Convert Sets back to Arrays to send to frontend
         res.json({ 
