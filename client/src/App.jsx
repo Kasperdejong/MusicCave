@@ -396,6 +396,7 @@ const handleCancelTransfer = () => {
                 })
             });
             fetchHistory();
+            fetchScannedPlaylists(); 
         }
         setIsTransferring(false);
     }
@@ -927,7 +928,7 @@ const handleCancelTransfer = () => {
                   gap: "10px",
                   boxSizing: "border-box"
                 }}>
-                  <p style={{ fontSize: "14px", fontWeight: "bold", margin: "0 0 5px 0", color: "#333", textAlign: "center" }}>Target Service</p>
+                  <p style={{ fontSize: "16px", fontWeight: "bold", margin: "0 0 5px 0", color: "#000", textAlign: "center" }}>Target Service</p>
                   
                   <div 
                     onClick={() => setTargetService('apple')} 
@@ -948,7 +949,7 @@ const handleCancelTransfer = () => {
                     Destination Apple
                   </div>
                   
-                  <div style={{ color: "#333", textAlign: "center", fontSize: "12px", fontWeight: "bold" }}>or</div>
+                  <div style={{ color: "#000", textAlign: "center", fontSize: "16px", fontWeight: "bold" }}>or</div>
                   
                   <div 
                     onClick={() => setTargetService('spotify')} 

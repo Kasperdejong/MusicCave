@@ -53,10 +53,12 @@ app.get('/api/stats', authenticateUser, async (req, res) => {
 // GET SCANNED PLAYLISTS (For the Hover Tooltips)
 app.get('/api/scanned-playlists', authenticateUser, async (req, res) => {
     try {
-        // Fetch all platform/playlist combos for this user
+        // Increased limit to 1,000,000 to handle absolutely massive music libraries
         const { data, error } = await supabase
             .from('user_songs')
-            .select('platform, playlist_name');
+            .select('platform, playlist_name')
+            .eq('user_id', req.user.id)
+            .limit(1000000); 
         
         if (error) throw error;
 
