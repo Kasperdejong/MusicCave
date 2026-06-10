@@ -9,6 +9,30 @@ const supabase = createClient(
 
 const EXTENSION_ID = "clammlphhicbgjpmjbgiedegkepkabcp";
 
+const stringSimilarity = (str1, str2) => {
+    if (!str1 || !str2) return 0;
+    str1 = str1.toLowerCase().replace(/[^a-z0-9]/g, '');
+    str2 = str2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (str1 === str2) return 1;
+    if (str1.length < 2 || str2.length < 2) return 0;
+
+    let bigrams1 = new Map();
+    for (let i = 0; i < str1.length - 1; i++) {
+        const bigram = str1.substring(i, i + 2);
+        bigrams1.set(bigram, (bigrams1.get(bigram) || 0) + 1);
+    }
+    let intersectionSize = 0;
+    for (let i = 0; i < str2.length - 1; i++) {
+        const bigram = str2.substring(i, i + 2);
+        const count = bigrams1.get(bigram);
+        if (count > 0) {
+            bigrams1.set(bigram, count - 1);
+            intersectionSize++;
+        }
+    }
+    return (2.0 * intersectionSize) / (str1.length - 1 + str2.length - 1);
+};
+
 function App() {
   // --- AUTH & NAVIGATION STATE ---
   const [session, setSession] = useState(null);
@@ -416,41 +440,32 @@ const handleCancelTransfer = () => {
   };
 
   // --- FUZZY DUPLICATE CHECKER ---
-  const isDuplicateSong = (source, target) => {
+ const isDuplicateSong = (source, target) => {
     const sTitle = source.title.toLowerCase();
     const tTitle = target.title.toLowerCase();
     const sArtist = source.artist.toLowerCase();
     const tArtist = target.artist.toLowerCase();
 
+    // 1. Exact Match
     if (sTitle === tTitle && sArtist === tArtist) return true;
 
-    const cleanTitle = (t) => {
-        return t.split('(')[0].split('[')[0].split('-')[0].split('–')[0].replace(/重制版/gi, '').trim();
-    };
+    // 2. Fuzzy Match (If Title is 85% similar and Artist is 75% similar)
+    const titleScore = stringSimilarity(sTitle, tTitle);
+    const artistScore = stringSimilarity(sArtist, tArtist);
+    
+    if (titleScore > 0.85 && artistScore > 0.75) return true;
 
-    const cleanArtist = (a) => {
-        return a
-            .split(',')[0]           
-            .split('&')[0]           
-            .split(/feat\.?/i)[0]    
-            .split(/ft\.?/i)[0]
-            .replace(/\s+/g, ' ')    
-            .trim();
-    };
+    // 3. Fallback to your original clean logic
+    const cleanTitle = (t) => t.split('(')[0].split('[')[0].split('-')[0].split('–')[0].trim();
+    const cleanArtist = (a) => a.split(',')[0].split('&')[0].split(/feat\.?/i)[0].split(/ft\.?/i)[0].trim();
 
-    const sTitleClean = cleanTitle(sTitle);
-    const tTitleClean = cleanTitle(tTitle);
-    const sArtistClean = cleanArtist(sArtist);
-    const tArtistClean = cleanArtist(tArtist);
-
-    if (sTitleClean === tTitleClean) {
-        if (sArtistClean === tArtistClean) return true;
-        if (sArtistClean.includes(tArtistClean) || tArtistClean.includes(sArtistClean)) return true;
-        if (sArtistClean.split(' ')[0] === tArtistClean.split(' ')[0]) return true;
+    if (cleanTitle(sTitle) === cleanTitle(tTitle)) {
+        if (cleanArtist(sArtist) === cleanArtist(tArtist)) return true;
+        if (cleanArtist(sArtist).includes(cleanArtist(tArtist)) || cleanArtist(tArtist).includes(cleanArtist(sArtist))) return true;
     }
 
     return false;
-  };
+};
 
   // --- STYLING & HELPERS ---
   const getPlaylistIcon = (n) => (n.toLowerCase().includes("liked") || n.toLowerCase().includes("favourite") || n.toLowerCase().includes("favorite")) ? "❤️" : "";

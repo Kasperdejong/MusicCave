@@ -148,6 +148,84 @@ function getCleanSearchQuery(song) {
 }
 
 // ==========================================
+// FUZZY MATCHING & SCORING ALGORITHM
+// ==========================================
+
+// 1. Calculates how similar two strings are (0.0 to 1.0)
+function stringSimilarity(str1, str2) {
+    if (!str1 || !str2) return 0;
+    str1 = str1.toLowerCase().replace(/[^a-z0-9]/g, '');
+    str2 = str2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (str1 === str2) return 1;
+    if (str1.length < 2 || str2.length < 2) return 0;
+
+    let bigrams1 = new Map();
+    for (let i = 0; i < str1.length - 1; i++) {
+        const bigram = str1.substring(i, i + 2);
+        bigrams1.set(bigram, (bigrams1.get(bigram) || 0) + 1);
+    }
+
+    let intersectionSize = 0;
+    for (let i = 0; i < str2.length - 1; i++) {
+        const bigram = str2.substring(i, i + 2);
+        const count = bigrams1.get(bigram);
+        if (count > 0) {
+            bigrams1.set(bigram, count - 1);
+            intersectionSize++;
+        }
+    }
+    return (2.0 * intersectionSize) / (str1.length - 1 + str2.length - 1);
+}
+
+// 2. Grades all DOM rows and picks the most accurate one
+function findBestSongMatch(rows, targetSong) {
+    let bestMatch = null;
+    let highestScore = 0;
+    
+    const cleanTargetTitle = targetSong.title.toLowerCase();
+    const cleanTargetArtist = targetSong.artist.toLowerCase();
+    const targetString = `${cleanTargetTitle} ${cleanTargetArtist}`.replace(/[^a-z0-9 ]/g, '');
+    
+    // Words we want to AVOID unless they are explicitly in the original title
+    const badModifiers = ['cover', 'karaoke', 'tribute', 'live', 'remix', 'instrumental', 'acoustic', 'sped up', 'slowed'];
+    const originalHasModifier = badModifiers.filter(w => cleanTargetTitle.includes(w));
+
+    // Base parts for exact match bonuses
+    const baseTitle = cleanTargetTitle.split(' - ')[0].split(' (')[0].split(' [')[0].trim();
+    const baseArtist = cleanTargetArtist.split(',')[0].split('&')[0].trim();
+
+    for (const row of rows) {
+        // Strip out newlines so we have one clean string (Spotify/Apple put titles/artists on different lines)
+        const rowText = row.innerText.toLowerCase().replace(/\n/g, ' ');
+        
+        // 1. Base Similarity Score
+        let score = stringSimilarity(targetString, rowText);
+
+        // 2. Exact Match Bonuses
+        if (rowText.includes(baseTitle)) score += 0.3;
+        if (rowText.includes(baseArtist)) score += 0.3;
+
+        // 3. Penalty for wrong versions (karaoke/covers)
+        for (const word of badModifiers) {
+            if (rowText.includes(word) && !originalHasModifier.includes(word)) {
+                score -= 0.6; // Massive penalty for wrong versions!
+            }
+        }
+
+        if (score > highestScore) {
+            highestScore = score;
+            bestMatch = row;
+        }
+    }
+
+    console.log(`Robot: Best match score for "${targetSong.title}" is ${highestScore.toFixed(2)}`);
+    
+    // Require a minimum score of 0.45 to accept the song. 
+    // It is better to fail and put it in the "Missed Songs" text file than to add a Karaoke track.
+    return highestScore > 0.45 ? bestMatch : null; 
+}
+
+// ==========================================
 // 1. SHARED AUTOMATION HELPERS
 // ==========================================
 
@@ -470,11 +548,10 @@ async function executeAppleInjection(song, targetName, sendResponse) {
         await sleep(4000); 
 
         const rows = document.querySelectorAll('main [role="row"], main .songs-list-row, main .grid-item');
-        let songRow = Array.from(rows).find(row => 
-            row.innerText.toLowerCase().includes(song.title.split(' - ')[0].toLowerCase())
-        );
+        const visibleRows = Array.from(rows).filter(row => row.getBoundingClientRect().width > 0);
+        let songRow = findBestSongMatch(visibleRows, song);
 
-        if (!songRow) throw new Error(`Song not found.`);
+        if (!songRow) throw new Error(`Accurate song match not found.`);
         console.log(`Robot: Song row found for ${song.title}`);
 
         songRow.scrollIntoView({ block: 'center' });
@@ -616,39 +693,22 @@ async function executeSpotifyInjection(song, targetName, sendResponse) {
 
         console.log("Robot: Searching for tracklist row...");
         let targetRow = null;
-               for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < 15; i++) {
             const rows = document.querySelectorAll('main [data-testid="tracklist-row"], [role="row"]');
             
-            // 1. Get only the visible rows (filters out sidebars and hidden stuff)
             const visibleRows = Array.from(rows).filter(row => {
                 const rect = row.getBoundingClientRect();
                 return rect.left > 250 && rect.width > 0;
             });
 
             if (visibleRows.length > 0) {
-                // Priority 1: Exact title match (safest)
-                targetRow = visibleRows.find(row => 
-                    row.innerText.toLowerCase().includes(song.title.split(' - ')[0].toLowerCase())
-                );
-                
-                // Priority 2: Ultra-clean title match (Finds "Fade to Black" even if it says Remastered)
-                if (!targetRow) {
-                    targetRow = visibleRows.find(row => 
-                        row.innerText.toLowerCase().includes(baseCleanTitle)
-                    );
-                }
-
-                // Priority 3: Ultimate Fallback -> Just grab the #1 top search result!
-                if (!targetRow) {
-                    console.log(`Robot: Using top search result fallback for: ${song.title}`);
-                    targetRow = visibleRows[0]; // Grab the first row
-                }
+                targetRow = findBestSongMatch(visibleRows, song);
             }
 
             if (targetRow) break;
             await sleep(400);
         }
-        if (!targetRow) throw new Error(`Song result not found.`);
+        if (!targetRow) throw new Error(`Accurate song result not found (Skipped Karaoke/Covers).`);
 
         targetRow.scrollIntoView({ block: 'center' });
         highlightElement(targetRow, "#1db954");
@@ -795,11 +855,10 @@ async function executeAppleLibraryInjection(song, sendResponse) {
 
         // 2. Find Song Row
         const rows = document.querySelectorAll('main [role="row"], main .songs-list-row, main .grid-item');
-        let songRow = Array.from(rows).find(row => 
-            row.innerText.toLowerCase().includes(song.title.split(' - ')[0].toLowerCase())
-        );
+        const visibleRows = Array.from(rows).filter(row => row.getBoundingClientRect().width > 0);
+        let songRow = findBestSongMatch(visibleRows, song);
 
-        if (!songRow) throw new Error(`Song not found.`);
+        if (!songRow) throw new Error(`Accurate song match not found (Skipped Karaoke/Covers).`);
         songRow.scrollIntoView({ block: 'center' });
         
         // 3. Open More Menu
@@ -920,21 +979,21 @@ async function executeSpotifyLikedInjection(song, sendResponse) {
         }
         if (filterClicked) await sleep(2000);
 
-        // 3. Find Row
         let targetRow = null;
         for (let i = 0; i < 15; i++) {
             const rows = document.querySelectorAll('main [data-testid="tracklist-row"], [role="row"]');
-            const visibleRows = Array.from(rows).filter(row => row.getBoundingClientRect().left > 250);
+            const visibleRows = Array.from(rows).filter(row => {
+                const rect = row.getBoundingClientRect();
+                return rect.left > 250 && rect.width > 0;
+            });
             
             if (visibleRows.length > 0) {
-                targetRow = visibleRows.find(row => row.innerText.toLowerCase().includes(song.title.split(' - ')[0].toLowerCase())) 
-                         || visibleRows.find(row => row.innerText.toLowerCase().includes(baseCleanTitle))
-                         || visibleRows[0];
+                targetRow = findBestSongMatch(visibleRows, song);
             }
             if (targetRow) break;
             await sleep(400);
         }
-        if (!targetRow) throw new Error(`Song result not found.`);
+        if (!targetRow) throw new Error(`Accurate song match not found (Skipped Karaoke/Covers).`);
 
         targetRow.scrollIntoView({ block: 'center' });
         await sleep(600);
