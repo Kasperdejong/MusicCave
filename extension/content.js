@@ -154,8 +154,9 @@ function getCleanSearchQuery(song) {
 // 1. Calculates how similar two strings are (0.0 to 1.0)
 function stringSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
-    str1 = str1.toLowerCase().replace(/[^a-z0-9]/g, '');
-    str2 = str2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    // FIX: \p{L} keeps all international characters
+    str1 = str1.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    str2 = str2.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
     if (str1 === str2) return 1;
     if (str1.length < 2 || str2.length < 2) return 0;
 
@@ -184,7 +185,9 @@ function findBestSongMatch(rows, targetSong) {
     
     const cleanTargetTitle = targetSong.title.toLowerCase();
     const cleanTargetArtist = targetSong.artist.toLowerCase();
-    const targetString = `${cleanTargetTitle} ${cleanTargetArtist}`.replace(/[^a-z0-9 ]/g, '');
+    
+    // FIX: Keep international characters here too
+    const targetString = `${cleanTargetTitle} ${cleanTargetArtist}`.replace(/[^\p{L}\p{N} ]/gu, '');
     
     // Words we want to AVOID unless they are explicitly in the original title
     const badModifiers = ['cover', 'karaoke', 'tribute', 'live', 'remix', 'instrumental', 'acoustic', 'sped up', 'slowed'];
@@ -195,7 +198,7 @@ function findBestSongMatch(rows, targetSong) {
     const baseArtist = cleanTargetArtist.split(',')[0].split('&')[0].trim();
 
     for (const row of rows) {
-        // Strip out newlines so we have one clean string (Spotify/Apple put titles/artists on different lines)
+        // Strip out newlines so we have one clean string
         const rowText = row.innerText.toLowerCase().replace(/\n/g, ' ');
         
         // 1. Base Similarity Score
@@ -208,7 +211,7 @@ function findBestSongMatch(rows, targetSong) {
         // 3. Penalty for wrong versions (karaoke/covers)
         for (const word of badModifiers) {
             if (rowText.includes(word) && !originalHasModifier.includes(word)) {
-                score -= 0.6; // Massive penalty for wrong versions!
+                score -= 0.6; // Massive penalty
             }
         }
 
@@ -220,9 +223,8 @@ function findBestSongMatch(rows, targetSong) {
 
     console.log(`Robot: Best match score for "${targetSong.title}" is ${highestScore.toFixed(2)}`);
     
-    // Require a minimum score of 0.45 to accept the song. 
-    // It is better to fail and put it in the "Missed Songs" text file than to add a Karaoke track.
-    return highestScore > 0.45 ? bestMatch : null; 
+    // Lowered threshold to 0.25 as requested!
+    return highestScore > 0.25 ? bestMatch : null; 
 }
 
 // ==========================================

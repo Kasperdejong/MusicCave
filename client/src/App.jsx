@@ -11,8 +11,9 @@ const EXTENSION_ID = "clammlphhicbgjpmjbgiedegkepkabcp";
 
 const stringSimilarity = (str1, str2) => {
     if (!str1 || !str2) return 0;
-    str1 = str1.toLowerCase().replace(/[^a-z0-9]/g, '');
-    str2 = str2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    // FIX: \p{L} keeps all international characters (Chinese, Japanese, accents, etc)
+    str1 = str1.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    str2 = str2.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
     if (str1 === str2) return 1;
     if (str1.length < 2 || str2.length < 2) return 0;
 
