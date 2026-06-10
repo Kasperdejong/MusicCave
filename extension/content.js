@@ -179,6 +179,7 @@ function stringSimilarity(str1, str2) {
 }
 
 // 2. Grades all DOM rows and picks the most accurate one
+// 2. Grades all DOM rows and picks the most accurate one
 function findBestSongMatch(rows, targetSong) {
     let bestMatch = null;
     let highestScore = 0;
@@ -186,32 +187,59 @@ function findBestSongMatch(rows, targetSong) {
     const cleanTargetTitle = targetSong.title.toLowerCase();
     const cleanTargetArtist = targetSong.artist.toLowerCase();
     
-    // FIX: Keep international characters here too
+    // Keep international characters for math
     const targetString = `${cleanTargetTitle} ${cleanTargetArtist}`.replace(/[^\p{L}\p{N} ]/gu, '');
     
-    // Words we want to AVOID unless they are explicitly in the original title
-    const badModifiers = ['cover', 'karaoke', 'tribute', 'live', 'remix', 'instrumental', 'acoustic', 'sped up', 'slowed'];
-    const originalHasModifier = badModifiers.filter(w => cleanTargetTitle.includes(w));
-
     // Base parts for exact match bonuses
     const baseTitle = cleanTargetTitle.split(' - ')[0].split(' (')[0].split(' [')[0].trim();
     const baseArtist = cleanTargetArtist.split(',')[0].split('&')[0].trim();
 
+    // 1. Hard-banned words (Covers/Karaoke) that apply to the WHOLE row text
+    const badModifiers = ['cover', 'karaoke', 'tribute', 'instrumental', 'sped up', 'slowed'];
+    const originalHasModifier = badModifiers.filter(w => cleanTargetTitle.includes(w));
+
     for (const row of rows) {
-        // Strip out newlines so we have one clean string
         const rowText = row.innerText.toLowerCase().replace(/\n/g, ' ');
         
-        // 1. Base Similarity Score
+        // Try to isolate JUST the title element so we don't accidentally penalize Album names
+        let rowTitle = "";
+        const titleEl = row.querySelector('div[dir="auto"], [data-testid="track-title"], .songs-list-row__song-name, a[data-testid="internal-track-link-name"]');
+        if (titleEl) {
+            rowTitle = titleEl.innerText.toLowerCase();
+        } else {
+            rowTitle = row.innerText.split('\n')[0].toLowerCase(); // Fallback
+        }
+
+        // Base Similarity Score
         let score = stringSimilarity(targetString, rowText);
 
-        // 2. Exact Match Bonuses
+        // Exact Match Bonuses
         if (rowText.includes(baseTitle)) score += 0.3;
         if (rowText.includes(baseArtist)) score += 0.3;
 
-        // 3. Penalty for wrong versions (karaoke/covers)
+        // ==========================================
+        // 2. DYNAMIC JUNK PENALTY
+        // Fixes "Alternate Mix", "Radio Edit", "Live Version" etc.
+        // ==========================================
+        
+        // This Regex matches anything inside ( ), [ ], or after a " - "
+        const junkMatches = rowTitle.match(/\([^)]+\)|\[[^\]]+\]|\s-\s.+/g);
+        if (junkMatches) {
+            for (let match of junkMatches) {
+                // Strip the symbols away, leaving just the words (e.g. "Alternate Mix")
+                let junkText = match.replace(/[()\[\]]/g, '').replace(/^\s*-\s*/, '').trim();
+                
+                // If the ORIGINAL title DOES NOT contain these words, it's an unwanted version!
+                if (junkText.length > 2 && !cleanTargetTitle.includes(junkText)) {
+                    score -= 0.5; // Heavy penalty for having extra version tags
+                }
+            }
+        }
+
+        // 3. Penalty for absolute wrong versions (karaoke/covers)
         for (const word of badModifiers) {
             if (rowText.includes(word) && !originalHasModifier.includes(word)) {
-                score -= 0.6; // Massive penalty
+                score -= 0.6; 
             }
         }
 
@@ -223,7 +251,6 @@ function findBestSongMatch(rows, targetSong) {
 
     console.log(`Robot: Best match score for "${targetSong.title}" is ${highestScore.toFixed(2)}`);
     
-    // Lowered threshold to 0.25 as requested!
     return highestScore > 0.25 ? bestMatch : null; 
 }
 
