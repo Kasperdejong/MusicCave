@@ -47,8 +47,15 @@ function App() {
 
   // --- CORE APP STATE ---
   const [serverStatus, setServerStatus] = useState("Checking...");
-  const [applePlaylists, setApplePlaylists] = useState(null);
-  const [spotifyPlaylists, setSpotifyPlaylists] = useState(null);
+// Load saved playlists from browser memory on refresh
+  const [applePlaylists, setApplePlaylists] = useState(() => {
+    const saved = localStorage.getItem('musiccave_apple_playlists');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [spotifyPlaylists, setSpotifyPlaylists] = useState(() => {
+    const saved = localStorage.getItem('musiccave_spotify_playlists');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [transferMode, setTransferMode] = useState("transfer_fill");
@@ -238,10 +245,17 @@ function App() {
             return;
           }
 
-          setPlatformData(prev => ({ ...prev, [platform]: data }));
-          if (platform === 'apple') { setApplePlaylists(data.playlists); setSelectedApple({ name: detectedName }); }
-          if (platform === 'spotify') { setSpotifyPlaylists(data.playlists); setSelectedSpotify({ name: detectedName }); }
-
+        setPlatformData(prev => ({ ...prev, [platform]: data }));
+          if (platform === 'apple') { 
+              setApplePlaylists(data.playlists); 
+              localStorage.setItem('musiccave_apple_playlists', JSON.stringify(data.playlists));
+              setSelectedApple({ name: detectedName }); 
+          }
+          if (platform === 'spotify') { 
+              setSpotifyPlaylists(data.playlists); 
+              localStorage.setItem('musiccave_spotify_playlists', JSON.stringify(data.playlists));
+              setSelectedSpotify({ name: detectedName }); 
+          }
           setSongCache(prev => ({
             ...prev,
             [platform]: {
@@ -643,8 +657,12 @@ const handleCancelTransfer = () => {
             <div style={{ backgroundColor: "rgba(255,255,255,0.15)", padding: "6px 15px", borderRadius: "20px", fontSize: "14px", border: "1px solid rgba(255,255,255,0.45)", display: "flex", alignItems: "center" }}>
               <span style={{ color: "#1db954", fontWeight: "bold", marginRight: "8px" }}>●</span> {totalSynced} Songs Synced
             </div>
-            <button onClick={() => supabase.auth.signOut()} style={{...navBtnStyle, color: "#fff"}}>Logout</button>
-          </div>
+              <button onClick={() => {
+                  localStorage.removeItem('musiccave_apple_playlists');
+                  localStorage.removeItem('musiccave_spotify_playlists');
+                  supabase.auth.signOut();
+              }} style={{...navBtnStyle, color: "#fff"}}>Logout</button>    
+            </div>
         </div>
 
         {/* FLOATING SERVER STATUS BUBBLE */}
