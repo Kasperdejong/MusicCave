@@ -6,10 +6,6 @@
   "permissions":[
     "tabs"
   ],
-  "host_permissions":[
-    "https://music.apple.com/*",
-    "https://open.spotify.com/*"
-  ],
   "background": {
     "service_worker": "background.js"
   },
