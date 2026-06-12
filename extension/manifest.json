@@ -4,8 +4,6 @@
   "version": "1.0",
   "description": "Connects MusicCave React App to Apple Music & Spotify DOM.",
   "permissions":[
-    "activeTab", 
-    "scripting", 
     "tabs"
   ],
   "host_permissions":[
