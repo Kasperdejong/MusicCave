@@ -86,10 +86,12 @@ function App() {
 
   const cancelTransferRef = useRef(false);
 
+  // --- IMPROVED AUTH STATES ---
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(false); // Tracks background API operations
 
   // --- INTERACTIVE HOVER STATES ---
   const [isHoveredStart, setIsHoveredStart] = useState(false);
@@ -104,42 +106,115 @@ function App() {
     };
     return fetch(url, { ...options, headers });
   };
+
+  // --- MAP SUPABASE ERRORS TO DESCRIPTIVE MESSAGES ---
+  const getFriendlyErrorMessage = (error) => {
+    if (!error) return "";
+    const msg = error.message ? error.message.toLowerCase() : "";
+    const code = error.code ? error.code.toLowerCase() : "";
+
+    // Exact database or API constraints mapping
+    if (code === 'email_exists' || msg.includes("already been registered") || msg.includes("email_exists")) {
+      return "This email is already in use. Try logging in instead, or reset your password if you forgot it.";
+    }
+    if (code === 'invalid_credentials' || msg.includes("invalid login credentials")) {
+      return "Incorrect email or password. Please double-check your credentials and try again.";
+    }
+    if (msg.includes("at least 6 characters") || msg.includes("password should be")) {
+      return "Password is too short. It must be at least 6 characters long.";
+    }
+    if (msg.includes("unable to validate") || msg.includes("valid email") || msg.includes("invalid format")) {
+      return "Please enter a valid email address structure (e.g., name@example.com).";
+    }
+    if (msg.includes("network") || msg.includes("fetch") || msg.includes("failed to fetch")) {
+      return "Network error! Please check your internet connection and try again.";
+    }
+    if (msg.includes("email not confirmed") || msg.includes("confirm your email")) {
+      return "Your email address hasn't been verified yet. Please check your inbox for a confirmation link.";
+    }
+    if (msg.includes("too many requests") || code === 'over_request_rate_limit') {
+      return "Too many attempts in a short period. Please wait a minute before trying again.";
+    }
+
+    // Return the actual message if none of our cases match, rather than swallowing it
+    return error.message || "An unexpected authentication error occurred.";
+  };
   
   const handleAuth = async (e) => {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
-    let result;
-    
-    if (isSignUp) {
-      result = await supabase.auth.signUp({ email, password });
-      if (!result.error) {
-        setSuccessMsg("Account created successfully! You can now log in.");
-        setIsSignUp(false);
-      }
-    } else {
-      result = await supabase.auth.signInWithPassword({ email, password });
+
+    // Frontend Pre-Validation to avoid unnecessary network roundtrips
+    if (!email.trim() || !email.includes("@")) {
+      setErrorMsg("Please enter a valid email address.");
+      return;
+    }
+    if (password.length < 6) {
+      setErrorMsg("Passwords must be at least 6 characters long.");
+      return;
     }
 
-    if (result.error) {
-      setErrorMsg(result.error.message);
+    setIsAuthLoading(true);
+    
+    try {
+      if (isSignUp) {
+        const result = await supabase.auth.signUp({ email, password });
+        
+        if (result.error) {
+          setErrorMsg(getFriendlyErrorMessage(result.error));
+        } else if (result.data?.user && (!result.data.user.identities || result.data.user.identities.length === 0)) {
+          // --- DUPLICATE CHECK TRIGGERED ---
+          // Supabase returns an empty identities list when User Enumeration Protection is enabled
+          setErrorMsg("This email address is already registered. Try logging in instead or request a password reset.");
+        } else {
+          setSuccessMsg("Account created! Please check your email inbox (and spam folder) for a confirmation link.");
+          setIsSignUp(false);
+          setPassword(""); // Clear password field for safety
+        }
+      } else {
+        const result = await supabase.auth.signInWithPassword({ email, password });
+        if (result.error) {
+          setErrorMsg(getFriendlyErrorMessage(result.error));
+        } else {
+          setSuccessMsg("Logged in successfully! Loading dashboard...");
+        }
+      }
+    } catch (err) {
+      console.error("Authentication crash log:", err);
+      setErrorMsg("An unexpected failure occurred. Check console logs or try again.");
+    } finally {
+      setIsAuthLoading(false);
     }
   };
 
   const handleForgotPassword = async () => {
     setErrorMsg("");
     setSuccessMsg("");
-    if (!email) {
-      setErrorMsg("Please enter your email address first.");
+    if (!email.trim()) {
+      setErrorMsg("Please enter your email address first so we know where to send the link.");
       return;
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
-    });
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setSuccessMsg("Password reset link has been sent to your email!");
+    if (!email.includes("@")) {
+      setErrorMsg("Please enter a valid email address.");
+      return;
+    }
+
+    setIsAuthLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      });
+      if (error) {
+        setErrorMsg(getFriendlyErrorMessage(error));
+      } else {
+        setSuccessMsg("A password reset link has been sent to your email inbox!");
+      }
+    } catch (err) {
+      console.error("Forgot password crash log:", err);
+      setErrorMsg("Unable to request password reset. Try again shortly.");
+    } finally {
+      setIsAuthLoading(false);
     }
   };
 
@@ -538,6 +613,7 @@ const handleCancelTransfer = () => {
       return a.name.localeCompare(b.name); // Alphabetical sorting for everything else
     });
 
+  // --- RENDERING AUTH VIEW (WITH IMPROVED UI STATES) ---
   if (!session) {
     return (
       <div style={{ backgroundColor: "#222", color: "#fff", height: "100vh", display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column" }}>
@@ -547,16 +623,30 @@ const handleCancelTransfer = () => {
           
           <form onSubmit={handleAuth} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
             <input 
-              type="email" placeholder="Email" value={email} 
-              onChange={(e) => setEmail(e.target.value)} required
-              style={{ padding: "12px", borderRadius: "5px", border: "none", outline: "none", color: "#333" }}
+              type="email" 
+              placeholder="Email" 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+              required
+              disabled={isAuthLoading}
+              style={{ 
+                padding: "12px", 
+                borderRadius: "5px", 
+                border: "none", 
+                outline: "none", 
+                color: "#333",
+                opacity: isAuthLoading ? 0.6 : 1,
+                cursor: isAuthLoading ? "not-allowed" : "text"
+              }}
             />
-          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
               <input 
                 type={showPassword ? "text" : "password"} 
                 placeholder="Password" 
                 value={password} 
-                onChange={(e) => setPassword(e.target.value)} required
+                onChange={(e) => setPassword(e.target.value)} 
+                required
+                disabled={isAuthLoading}
                 style={{ 
                   padding: "12px", 
                   paddingRight: "40px", 
@@ -565,18 +655,21 @@ const handleCancelTransfer = () => {
                   outline: "none", 
                   color: "#333",
                   width: "100%",
-                  boxSizing: "border-box"
+                  boxSizing: "border-box",
+                  opacity: isAuthLoading ? 0.6 : 1,
+                  cursor: isAuthLoading ? "not-allowed" : "text"
                 }}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                disabled={isAuthLoading}
                 style={{
                   position: "absolute",
                   right: "10px",
                   background: "none",
                   border: "none",
-                  cursor: "pointer",
+                  cursor: isAuthLoading ? "not-allowed" : "pointer",
                   padding: 0,
                   display: "flex",
                   alignItems: "center",
@@ -600,19 +693,79 @@ const handleCancelTransfer = () => {
                 )}
               </button>
             </div>
-            <button type="submit" style={{ padding: "12px", borderRadius: "5px", border: "none", backgroundColor: "#6a0dad", color: "#fff", fontWeight: "bold", cursor: "pointer" }}>
-              {isSignUp ? "SIGN UP" : "LOG IN"}
+
+            {/* Helper Requirements Hint */}
+            {isSignUp && (
+              <span style={{ fontSize: "11px", color: "#aaa", marginTop: "-5px", display: "block" }}>
+                * Password must be 6 or more characters.
+              </span>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={isAuthLoading}
+              style={{ 
+                padding: "12px", 
+                borderRadius: "5px", 
+                border: "none", 
+                backgroundColor: isAuthLoading ? "#555" : "#6a0dad", 
+                color: "#fff", 
+                fontWeight: "bold", 
+                cursor: isAuthLoading ? "not-allowed" : "pointer",
+                transition: "all 0.2s ease"
+              }}
+            >
+              {isAuthLoading ? (isSignUp ? "CREATING ACCOUNT..." : "LOGGING IN...") : (isSignUp ? "SIGN UP" : "LOG IN")}
             </button>
           </form>
 
-          {errorMsg && <p style={{ color: "#ff4d4d", fontSize: "14px", marginTop: "15px", textAlign: "center", fontWeight: "bold" }}>⚠️ {errorMsg}</p>}
-          {successMsg && <p style={{ color: "#1db954", fontSize: "14px", marginTop: "15px", textAlign: "center", fontWeight: "bold" }}>✅ {successMsg}</p>}
+          {/* Alert Messages */}
+          {errorMsg && (
+            <p style={{ 
+              color: "#ff4d4d", 
+              fontSize: "14px", 
+              marginTop: "15px", 
+              textAlign: "center", 
+              fontWeight: "bold",
+              backgroundColor: "rgba(255, 77, 77, 0.15)",
+              padding: "10px",
+              borderRadius: "5px",
+              border: "1px solid rgba(255, 77, 77, 0.3)"
+            }}>
+              ⚠️ {errorMsg}
+            </p>
+          )}
+          {successMsg && (
+            <p style={{ 
+              color: "#1db954", 
+              fontSize: "14px", 
+              marginTop: "15px", 
+              textAlign: "center", 
+              fontWeight: "bold",
+              backgroundColor: "rgba(29, 185, 84, 0.15)",
+              padding: "10px",
+              borderRadius: "5px",
+              border: "1px solid rgba(29, 185, 84, 0.3)"
+            }}>
+              ✅ {successMsg}
+            </p>
+          )}
 
           <p style={{ textAlign: "center", marginTop: "20px", fontSize: "14px", color: "#aaa" }}>
             {isSignUp ? "Already have an account?" : "New to MusicCave?"}{" "}
             <span 
-              onClick={() => { setIsSignUp(!isSignUp); setErrorMsg(""); setSuccessMsg(""); }} 
-              style={{ color: "#38bdf8", cursor: "pointer", fontWeight: "bold" }}
+              onClick={() => { 
+                if (!isAuthLoading) {
+                  setIsSignUp(!isSignUp); 
+                  setErrorMsg(""); 
+                  setSuccessMsg(""); 
+                }
+              }} 
+              style={{ 
+                color: isAuthLoading ? "#555" : "#38bdf8", 
+                cursor: isAuthLoading ? "not-allowed" : "pointer", 
+                fontWeight: "bold" 
+              }}
             >
               {isSignUp ? "Log In" : "Sign Up Free"}
             </span>
@@ -620,12 +773,22 @@ const handleCancelTransfer = () => {
 
           {!isSignUp && (
             <div style={{ textAlign: "center", marginTop: "20px" }}>
-              <span 
+              <button 
+                type="button"
+                disabled={isAuthLoading}
                 onClick={handleForgotPassword} 
-                style={{ color: "#38bdf8", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}
+                style={{ 
+                  color: isAuthLoading ? "#555" : "#38bdf8", 
+                  cursor: isAuthLoading ? "not-allowed" : "pointer", 
+                  fontSize: "14px", 
+                  fontWeight: "bold",
+                  background: "none",
+                  border: "none",
+                  padding: "0"
+                }}
               >
-                Forgot Password?
-              </span>
+                {isAuthLoading ? "Please wait..." : "Forgot Password?"}
+              </button>
             </div>
           )}
         </div>
@@ -1093,7 +1256,7 @@ const handleCancelTransfer = () => {
           /* PRIVACY VIEW */
           <div style={{ padding: "50px", maxWidth: "800px", margin: "40px auto", backgroundColor: "#333", borderRadius: "15px", border: "1px solid #444", boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
             <h1 style={{ fontSize: "32px", marginBottom: "10px", color: "#fff", textAlign: "center" }}>Privacy Policy</h1>
-            <p style={{ color: "#aaa", textAlign: "center", marginBottom: "40px" }}>Last Updated: June 2 2026</p>
+            <p style={{ color: "#aaa", textAlign: "center", marginBottom: "40px" }}>Last Updated: June 12 2026</p>
 
             <h3 style={{ color: "#1db954", marginBottom: "10px" }}>1. Data Collection</h3>
             <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>The MusicCave extension does not collect, transmit, distribute, or sell your personal data. All processes required to read playlist data and navigate the user interface happen entirely locally on your own computer.</p>
@@ -1105,7 +1268,11 @@ const handleCancelTransfer = () => {
             <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>The extension communicates solely with the official MusicCave web application to receive transfer instructions. No song data or browsing history is sent to third-party advertising or tracking servers.</p>
 
             <h3 style={{ color: "#1db954", marginBottom: "10px" }}>4. Permissions</h3>
-            <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>The extension requests access to "tabs" and "scripting" strictly for the domains music.apple.com and open.spotify.com. These permissions are used exclusively to read song titles and assist with UI navigation during an active migration session.</p>
+            <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>
+            The extension requests the "tabs" permission strictly to coordinate and switch focus between your web dashboard and open music player tabs. Additionally, the extension uses static content script matching 
+            restricted entirely to the music.apple.com and open.spotify.com domains. 
+            This access is used exclusively to read song titles and assist with user interface navigation during an active migration
+            </p>
 
             <h3 style={{ color: "#1db954", marginBottom: "10px" }}>5. Contact</h3>
             <p style={{ color: "#ccc", lineHeight: "1.6" }}>If you have any questions regarding this privacy policy, please contact the developer via the Chrome Web Store support tab.</p>
