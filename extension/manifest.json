@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "MusicCave",
-  "version": "1.0",
+  "version": "1.1",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqGUm1wbywGQjecRVYKHd6DXs88z8y1ITQb/2nfdBe4jrZfYkIxU/3Xt6jX1tg4TdIAbukjLlgN0qx6iTrgVVWKqRRZyYK6mW2cVDCkGfYEPt+NgRBdialllqvGVru/au9f5AFe9TYB6OB2HATa3s3iIw6l3Jam0ve6J7VbKUF70vCCzso1vo2kmMINUdLN/Z34G6TwOnoXkOmtwugbNQus3mCye1kLT2EZrcyTqb8emmDmkGARxzZQDRaB7Dhmpw6GNUzb54nwrtUya/vasbWbOw2t1xQfLz+WMqaP+HO9v8bxB8So/fKerUSGl5f048Wnb7OvZTPRiVwOAaXT/QIDAQAB",
   "description": "Connects MusicCave React App to Apple Music & Spotify DOM.",
   "permissions":[
     "tabs"

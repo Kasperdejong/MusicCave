@@ -7,10 +7,7 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const EXTENSION_ID = import.meta.env.DEV 
-  ? "clammlphhicbgjpmjbgiedegkepkabcp"  // Your local unpacked ID for testing
-  : "eldnapkjmgljbmdgainoefmpompdjmdh"; // Your official published Web Store ID
+const EXTENSION_ID = "eldnapkjmgljbmdgainoefmpompdjmdh";
 
 const stringSimilarity = (str1, str2) => {
     if (!str1 || !str2) return 0;
