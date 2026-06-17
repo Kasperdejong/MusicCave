@@ -7,8 +7,10 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-const EXTENSION_ID = "clammlphhicbgjpmjbgiedegkepkabcp";
-
+const EXTENSION_ID = import.meta.env.DEV 
+  ? "clammlphhicbgjpmjbgiedegkepkabcp"  // Your local unpacked ID for testing
+  : "eldnapkjmgljbmdgainoefmpompdjmdh"; // Your official published Web Store ID
+  
 const stringSimilarity = (str1, str2) => {
     if (!str1 || !str2) return 0;
     str1 = str1.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
