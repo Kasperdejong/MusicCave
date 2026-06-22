@@ -2,6 +2,10 @@
 
 **MusicCave** is a full-stack SaaS platform and Chrome Extension that magically transfers playlists between Apple Music and Spotify. Instead of relying on strict API limits, MusicCave uses custom DOM automation to physically read your screen, cross-reference a PostgreSQL database to prevent duplicates, and automatically build your playlists on the target platform.
 
+## Disclaimer:
+
+MusicCave is an independent, open-source project and is not affiliated with, authorized, maintained, sponsored, or endorsed by Apple Inc., Spotify AB, or any of their affiliates or subsidiaries. All product and company names are trademarks™ or registered® trademarks of their respective holders. Use of them does not imply any affiliation with or endorsement by them.
+
 ---
 
 ## Live Deployment

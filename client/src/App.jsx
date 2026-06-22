@@ -1274,7 +1274,15 @@ const handleCancelTransfer = () => {
             This access is used exclusively to read song titles and assist with user interface navigation during an active migration
             </p>
 
-            <h3 style={{ color: "#1db954", marginBottom: "10px" }}>5. Contact</h3>
+            <h3 style={{ color: "#1db954", marginBottom: "10px" }}>5. Disclaimer</h3>
+            <p style={{ color: "#ccc", marginBottom: "25px", lineHeight: "1.6" }}>
+            MusicCave is an independent, open-source project and is not affiliated with, authorized, maintained, sponsored, 
+            or endorsed by Apple Inc., Spotify AB, or any of their affiliates or subsidiaries. 
+            All product and company names are trademarks™ or registered® trademarks of their respective holders.
+            Use of them does not imply any affiliation with or endorsement by them.
+            </p>
+
+            <h3 style={{ color: "#1db954", marginBottom: "10px" }}>6. Contact</h3>
             <p style={{ color: "#ccc", lineHeight: "1.6" }}>If you have any questions regarding this privacy policy, please contact the developer via the Chrome Web Store support tab.</p>
           </div>
         )}
@@ -1376,8 +1384,25 @@ const handleCancelTransfer = () => {
           </div>
 
         </div>
-      </div>
 
+        {/* LEGAL DISCLAIMER */}
+        <div style={{ 
+          maxWidth: "920px", 
+          margin: "40px auto 0 auto", 
+          padding: "0 20px", 
+          fontSize: "11px", 
+          color: "#666", 
+          lineHeight: "1.6",
+          textAlign: "center",
+          borderTop: "1px solid #222",
+          paddingTop: "20px"
+        }}>
+          <strong>Disclaimer:</strong> MusicCave is an independent, open-source project and is not affiliated with, 
+          authorized, maintained, sponsored, or endorsed by Apple Inc., Spotify AB, or any of their affiliates 
+          or subsidiaries. All product and company names are trademarks™ or registered® trademarks of their 
+          respective holders. Use of them does not imply any affiliation with or endorsement by them.
+        </div>
+      </div>
     </div>
   );
 }
