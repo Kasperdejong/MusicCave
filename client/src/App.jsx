@@ -812,8 +812,13 @@ const handleCancelTransfer = () => {
             <img src="/Logo.png" alt="MusicCave Logo" style={{ height: "35px" }} />
             MusicCave
           </div>
-          <a 
-              href="https://www.patreon.com/Makkeroni" // Replace with your actual Patreon link
+          
+          {/* RIGHT SIDE CONTAINER */}
+          <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
+            
+            {/* PATREON BUTTON (Moved inside the right-side container, right next to Dashboard) */}
+            <a 
+              href="https://www.patreon.com/Makkeroni"
               target="_blank" 
               rel="noopener noreferrer"
               style={{
@@ -847,7 +852,7 @@ const handleCancelTransfer = () => {
               </svg>
               <span>Support me on Patreon</span>
             </a>
-          <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
+
             <button onClick={() => setView("dashboard")} style={navBtnStyle}>Dashboard</button>
             <button onClick={() => setView("history")} style={navBtnStyle}>History</button>
             <button onClick={() => setView("privacy")} style={navBtnStyle}>Privacy</button>
@@ -855,12 +860,12 @@ const handleCancelTransfer = () => {
             <div style={{ backgroundColor: "rgba(255,255,255,0.15)", padding: "6px 15px", borderRadius: "20px", fontSize: "14px", border: "1px solid rgba(255,255,255,0.45)", display: "flex", alignItems: "center" }}>
               <span style={{ color: "#1db954", fontWeight: "bold", marginRight: "8px" }}>●</span> {totalSynced} Songs Synced
             </div>
-              <button onClick={() => {
-                  localStorage.removeItem('musiccave_apple_playlists');
-                  localStorage.removeItem('musiccave_spotify_playlists');
-                  supabase.auth.signOut();
-              }} style={{...navBtnStyle, color: "#fff"}}>Logout</button>    
-            </div>
+            <button onClick={() => {
+                localStorage.removeItem('musiccave_apple_playlists');
+                localStorage.removeItem('musiccave_spotify_playlists');
+                supabase.auth.signOut();
+            }} style={{...navBtnStyle, color: "#fff"}}>Logout</button>    
+          </div>
         </div>
 
         {/* FLOATING SERVER STATUS BUBBLE */}
