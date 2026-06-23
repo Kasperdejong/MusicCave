@@ -803,20 +803,22 @@ const handleCancelTransfer = () => {
       {/* WRAPPER FOR SCROLLABLE VIEWPORT CONTENT */}
       <div style={{ flex: "1", paddingBottom: "50px" }}>
         
-        {/* NAVBAR */}
+       {/* NAVBAR */}
         <div style={{ backgroundColor: "#6a0dad", padding: "15px 30px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div 
-            onClick={() => setView("dashboard")}
-            style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "20px", fontWeight: "bold", cursor: "pointer" }}
-          >
-            <img src="/Logo.png" alt="MusicCave Logo" style={{ height: "35px" }} />
-            MusicCave
-          </div>
           
-          {/* RIGHT SIDE CONTAINER */}
-          <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
+          {/* LEFT SIDE WRAPPER (Groups Logo and Patreon Button on the left) */}
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
             
-            {/* PATREON BUTTON (Moved inside the right-side container, right next to Dashboard) */}
+            {/* BRAND LOGO / NAME */}
+            <div 
+              onClick={() => setView("dashboard")}
+              style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "20px", fontWeight: "bold", cursor: "pointer" }}
+            >
+              <img src="/Logo.png" alt="MusicCave Logo" style={{ height: "35px" }} />
+              MusicCave
+            </div>
+
+            {/* PATREON BUTTON (Positioned in top-left, right next to MusicCave text) */}
             <a 
               href="https://www.patreon.com/Makkeroni"
               target="_blank" 
@@ -827,11 +829,11 @@ const handleCancelTransfer = () => {
                 gap: "8px",
                 backgroundColor: "#FF424D", // Official Patreon Coral Red
                 color: "#ffffff",
-                padding: "8px 16px",
+                padding: "6px 12px",
                 borderRadius: "20px",
                 fontWeight: "bold",
                 textDecoration: "none",
-                fontSize: "14px",
+                fontSize: "13px",
                 boxShadow: "0 4px 12px rgba(255, 66, 77, 0.3)",
                 transition: "transform 0.2s ease, box-shadow 0.2s ease",
                 cursor: "pointer",
@@ -847,12 +849,16 @@ const handleCancelTransfer = () => {
               }}
             >
               {/* PATREON SVG ICON */}
-              <svg viewBox="0 0 24 24" fill="#ffffff" style={{ height: "18px", width: "18px" }}>
+              <svg viewBox="0 0 24 24" fill="#ffffff" style={{ height: "14px", width: "14px" }}>
                 <path d="M15.386 11.5c0-2.812-2.28-5.093-5.093-5.093-2.813 0-5.093 2.28-5.093 5.093 0 2.812 2.28 5.093 5.093 5.093 2.812 0 5.093-2.28 5.093-5.093zm-11.536 7.5h2.152V4H3.85v15z"/>
               </svg>
-              <span>Support me on Patreon</span>
+              <span>Support on Patreon</span>
             </a>
 
+          </div>
+
+          {/* RIGHT SIDE CONTAINER */}
+          <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
             <button onClick={() => setView("dashboard")} style={navBtnStyle}>Dashboard</button>
             <button onClick={() => setView("history")} style={navBtnStyle}>History</button>
             <button onClick={() => setView("privacy")} style={navBtnStyle}>Privacy</button>
