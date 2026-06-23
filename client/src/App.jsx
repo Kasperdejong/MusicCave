@@ -852,7 +852,7 @@ const handleCancelTransfer = () => {
               <svg viewBox="0 0 24 24" fill="#ffffff" style={{ height: "14px", width: "14px" }}>
                 <path d="M15.386 11.5c0-2.812-2.28-5.093-5.093-5.093-2.813 0-5.093 2.28-5.093 5.093 0 2.812 2.28 5.093 5.093 5.093 2.812 0 5.093-2.28 5.093-5.093zm-11.536 7.5h2.152V4H3.85v15z"/>
               </svg>
-              <span>Support on Patreon</span>
+              <span>Support me on Patreon</span>
             </a>
 
           </div>
