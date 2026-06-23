@@ -809,6 +809,41 @@ const handleCancelTransfer = () => {
             onClick={() => setView("dashboard")}
             style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "20px", fontWeight: "bold", cursor: "pointer" }}
           >
+            <a 
+              href="https://www.patreon.com/Makkeroni" // Replace with your actual Patreon link
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                backgroundColor: "#FF424D", // Official Patreon Coral Red
+                color: "#ffffff",
+                padding: "8px 16px",
+                borderRadius: "20px",
+                fontWeight: "bold",
+                textDecoration: "none",
+                fontSize: "14px",
+                boxShadow: "0 4px 12px rgba(255, 66, 77, 0.3)",
+                transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                cursor: "pointer",
+                border: "none"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "scale(1.05)";
+                e.currentTarget.style.boxShadow = "0 6px 18px rgba(255, 66, 77, 0.5)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "scale(1)";
+                e.currentTarget.style.boxShadow = "0 4px 12px rgba(255, 66, 77, 0.3)";
+              }}
+            >
+              {/* PATREON SVG ICON */}
+              <svg viewBox="0 0 24 24" fill="#ffffff" style={{ height: "18px", width: "18px" }}>
+                <path d="M15.386 11.5c0-2.812-2.28-5.093-5.093-5.093-2.813 0-5.093 2.28-5.093 5.093 0 2.812 2.28 5.093 5.093 5.093 2.812 0 5.093-2.28 5.093-5.093zm-11.536 7.5h2.152V4H3.85v15z"/>
+              </svg>
+              <span>Support me on Patreon</span>
+            </a>
             <img src="/Logo.png" alt="MusicCave Logo" style={{ height: "35px" }} />
             MusicCave
           </div>
