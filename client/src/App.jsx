@@ -809,7 +809,10 @@ const handleCancelTransfer = () => {
             onClick={() => setView("dashboard")}
             style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "20px", fontWeight: "bold", cursor: "pointer" }}
           >
-            <a 
+            <img src="/Logo.png" alt="MusicCave Logo" style={{ height: "35px" }} />
+            MusicCave
+          </div>
+          <a 
               href="https://www.patreon.com/Makkeroni" // Replace with your actual Patreon link
               target="_blank" 
               rel="noopener noreferrer"
@@ -844,9 +847,6 @@ const handleCancelTransfer = () => {
               </svg>
               <span>Support me on Patreon</span>
             </a>
-            <img src="/Logo.png" alt="MusicCave Logo" style={{ height: "35px" }} />
-            MusicCave
-          </div>
           <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
             <button onClick={() => setView("dashboard")} style={navBtnStyle}>Dashboard</button>
             <button onClick={() => setView("history")} style={navBtnStyle}>History</button>
