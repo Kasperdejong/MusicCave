@@ -302,7 +302,7 @@ async function commitSelection(element = null) {
 }
 
 // ==========================================
-// 2. APPLE-SPECIFIC HELPERS (RESTORED FROM BACKUP)
+// 2. APPLE-SPECIFIC HELPERS 
 // ==========================================
 
 async function typeIntoAppleInput(input, text) {

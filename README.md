@@ -87,14 +87,3 @@ VITE_SUPABASE_ANON_KEY=your_anon_key
 
 Start the React app: npm run dev
 Open http://localhost:5173 in Chrome. Log in and start transferring!
-
-## Notes Les documentatie
-
-- Maak een ERD (niet alleen voor mezelf maar ook voor anderen voor overzicht van de Database)
-
-- Een van de beoordelingscriteria is dat je bewust hebt gedocumenteerd. (server, extensie, client, ERD(database))
-  Ik wil zorgen dat de volgende onderdelen goed gedocumenteerd staan in de code en/of wiki/readme:
-  De Server (API Endpoints)
-  De Extensie (Background workers, DOM manipulatie)
-  De Client (State management, API calls)
-  ERD (Supabase architectuur)
