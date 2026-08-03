@@ -1,4 +1,16 @@
-// background.js
+/**
+ * MusicCave Extension Service Worker - background.js
+ * 
+ * Role:
+ *   The persistent background coordinator for the browser extension.
+ * 
+ * Key Responsibilities:
+ *   - Listens for external messaging triggers initiated from the authorized MusicCave web application.
+ *   - Queries active browser tabs, updates tab focuses, and routes tasks to the correct streaming service (Spotify or Apple Music).
+ *   - Forwards real-time song details and progress statuses between the content scripts and the frontend dashboard.
+ *   - Distributes systemic actions like UI cleanups and global transfer abort/kill commands across active music player tabs.
+ */
+
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
     
     // ACTION 1: SCAN ALL TABS 

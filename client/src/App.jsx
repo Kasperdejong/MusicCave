@@ -1,6 +1,20 @@
 import { useState, useEffect, useRef  } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
+/**
+ * MusicCave Frontend - App.jsx
+ * 
+ * Role: 
+ *   The primary User Interface (UI) for the MusicCave web application.
+ * 
+ * Key Responsibilities:
+ *   - Manages user authentication (Sign Up, Log In, Password Reset) using the Supabase client.
+ *   - Coordinates communications with the MusicCave Chrome extension using external message passing.
+ *   - Guides the user through choosing source playlists, selecting destinations, and initiating transfers.
+ *   - Maintains local state for server statuses, scanned playlists, duplicate tracks, and transfer progress.
+ *   - Renders the dashboard, transfer history, and privacy policy views.
+ */
+
 // 1. Initialize Supabase
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -127,7 +141,7 @@ function App() {
       return "Please enter a valid email address structure (e.g., name@example.com).";
     }
     if (msg.includes("network") || msg.includes("fetch") || msg.includes("failed to fetch")) {
-      return "Network error! Please check your internet connection and try again.";
+      return "Network error! The server is probably down. Message the email address on the Chrome-extension page to ask me to unpause it.";
     }
     if (msg.includes("email not confirmed") || msg.includes("confirm your email")) {
       return "Your email address hasn't been verified yet. Please check your inbox for a confirmation link.";

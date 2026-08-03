@@ -4,6 +4,19 @@ console.log("MusicCave Content Script: FULL HYBRID MODE ACTIVE");
 // The Global Cancel Flag
 let globalCancelFlag = false;
 
+/**
+ * MusicCave Extension Content Script - content.js
+ * 
+ * Role:
+ *   The automation agent that runs directly inside the browser tabs of 'open.spotify.com' and 'music.apple.com'.
+ * 
+ * Key Responsibilities:
+ *   - Performs "deep scrapes" by scrolling pages and reading DOM elements to extract playlist names, song titles, and artist names.
+ *   - Automates the target page's search inputs, contextual menus, and buttons to programmatically add matching tracks.
+ *   - Injectively renders clean in-page progress overlays, warning dialogs, and a manual "cancel" option directly on the music platform's UI.
+ *   - Implements fuzzy logic scoring to match song titles and clean up search strings to minimize missed transitions.
+ */
+
 // Smart Sleep. This checks the cancel flag every 100ms. 
 // If you click cancel, it instantly throws an error to abort the script!
 const sleep = (ms) => new Promise((resolve, reject) => {

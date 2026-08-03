@@ -3,6 +3,19 @@ const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 
+/**
+ * MusicCave Backend API - index.js
+ * 
+ * Role:
+ *   The Node.js/Express server that acts as the backend orchestrator for MusicCave data storage.
+ * 
+ * Key Responsibilities:
+ *   - Authenticates secure requests from the React client using Supabase JWT authorization middleware.
+ *   - Exposes REST endpoints to store and retrieve user transfer histories, database stats, and duplicate tracking.
+ *   - Manages track indexing/syncing (`/api/sync`) and handles database pagination to fetch large sets of cached playlist data.
+ *   - Interacts with the Supabase PostgreSQL database to query and delete tracked records securely on a per-user basis.
+ */
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
