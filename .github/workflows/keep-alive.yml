@@ -2,9 +2,8 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    # Runs every 4 days at 00:00 UTC
     - cron: "0 0 */4 * *"
-  workflow_dispatch: # Lets you manually trigger it to test
+  workflow_dispatch:
 
 jobs:
   ping-db:
@@ -12,7 +11,13 @@ jobs:
     steps:
       - name: Ping Supabase Database
         run: |
-          curl --fail --show-error \
+          # Replace 'songs' with any real table name in your musiccave database
+          TABLE_NAME="user_songs"
+
+          # Clean URL in case it has a trailing slash
+          CLEAN_URL=$(echo "${{ secrets.SUPABASE_URL }}" | sed 's:/*$::')
+
+          curl --fail --show-error -s -L \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
-            "${{ secrets.SUPABASE_URL }}/rest/v1/"
+            "$CLEAN_URL/rest/v1/$TABLE_NAME?select=*&limit=1"
